@@ -1,9 +1,20 @@
 <!DOCTYPE html>
+<!--
+  ORCO Version 1.01 - Objective Residue Classification Oracle
+  Single-file Bayesian residue classifier for solid-state NMR backbone shifts.
+  Author: Owen Raymond, 2026.
+  Reference table: Wishart RefDB per-residue, per-secondary-structure means/sigmas
+  (HA, CA, CB, CO, N, HN), bundled below in the #statsData block.
+  This page is self-contained: no external scripts, fonts, or images. Should be
+  archivable as a single file and openable in any browser indefinitely.
+-->
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>ORCO Version 1.0</title>
+  <title>ORCO Version 1.01</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="generator" content="ORCO 1.0">
+  <meta name="description" content="Bayesian residue classifier for NMR backbone chemical shifts.">
   <style>
 body {
   background: #ffffff;
@@ -100,8 +111,33 @@ input[type="reset"], button {
   overflow-x: auto;
 }
 
+.error {
+  border: 1px solid #993333;
+  background: #fff0f0;
+  color: #660000;
+  padding: 8px 12px;
+  margin-top: 10px;
+  font-family: "Courier New", Courier, monospace;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
 @media (max-width: 900px) {
   .page { width: 94%; }
+}
+
+@media (max-width: 480px) {
+  body { font-size: 15px; padding: 8px 0 24px 0; }
+  .page { width: 96%; }
+  .box { padding: 8px; margin-bottom: 12px; }
+  textarea { width: 99%; font-size: 12px; }
+  .example { font-size: 12px; padding: 6px; }
+  .resultbox pre { font-size: 12px; }
+  hr { margin: 14px 0; }
+  input[type="submit"], input[type="reset"], button {
+    padding: 6px 12px;
+    font-size: 14px;
+  }
 }
   </style>
 </head>
@@ -117,7 +153,7 @@ input[type="reset"], button {
       Observed shifts are compared against per-residue, per-secondary-structure reference
       means and standard deviations from the Wishart RefDB using a naive-Gaussian likelihood,
       with secondary-structure states marginalized out. The reference table is bundled with
-      the page and uses the six backbone channels HA, CA, CB, CO, N, and HN.
+      the page and uses the six backbone atoms HA, CA, CB, CO, N, and HN.
     </p>
 
     <p id="citation">
@@ -129,16 +165,18 @@ input[type="reset"], button {
     <div class="box">
       <p><b>Input format (SHIFTY):</b></p>
       <p>
-        Paste a SHIFTY-formatted shift table into the box below. The first line is the column
+        Paste a SHIFTY-style shift table into the box below. The first line is the column
         header. Each subsequent line is one residue: <tt>NUM AA</tt> followed by chemical
-        shifts in the order given by the header. Use <tt>0.00</tt> for missing shifts.
+        shifts in the order given by the header. Use <tt>0.00</tt> for missing shifts
+        (any shift exactly equal to 0.00 ppm is treated as absent &mdash; this convention is safe
+        for backbone HA/CA/CB/CO/N/HN, which never legitimately read 0.00).
         Use spaces (not tabs). The AA column may be the one-letter code or <tt>?</tt>/<tt>X</tt>
         if unknown &mdash; it is passed through to the output and not used in classification.
         The six channels HA, CA, CB, CO, N, and HN are all used by the solver when present.
       </p>
       <pre class="example">#NUM AA  HA    CA    CB    CO     N      HN
-1    M   4.05  54.91 32.83 172.14 0.00   0.00
-2    D   4.64  54.42 41.39 175.10 0.00   0.00
+1    X   4.05  54.91 32.83 172.14 0.00   0.00
+2    ?   4.64  54.42 41.39 175.10 0.00   0.00
 3    R   4.33  55.97 30.99 174.82 121.91 8.36
 4    V   4.31  60.10 34.32 176.08 118.71 7.99</pre>
     </div>
@@ -150,13 +188,7 @@ input[type="reset"], button {
 1    M   4.05  54.91 32.83 172.14 0.00   0.00
 2    D   4.64  54.42 41.39 175.10 0.00   0.00
 3    R   4.33  55.97 30.99 174.82 121.91 8.36
-4    V   4.31  60.10 34.32 176.08 118.71 7.99
-5    L   4.56  54.92 42.56 177.30 125.27 9.13
-6    S   4.51  56.92 65.24 174.45 122.00 9.37
-7    R   3.78  60.08 29.41 178.10 122.02 8.79
-8    A   4.02  54.77 18.01 180.26 121.13 8.25
-9    D   4.44  56.85 41.59 177.70 120.84 7.88
-10   K   3.66  59.98 31.95 177.65 120.80 8.03</textarea>
+</textarea>
 
         <p><b>Output:</b> After submission, ORCO displays a preview and provides a downloadable
           <tt>orco_results.txt</tt> file containing the top three residue-class predictions per residue.</p>
@@ -166,6 +198,7 @@ input[type="reset"], button {
           <input type="reset" value="Clear">
         </p>
       </form>
+      <div id="errorBox" class="error" role="alert" hidden></div>
     </div>
 
     <div class="box resultbox" id="results" hidden>
@@ -181,6 +214,17 @@ input[type="reset"], button {
     </p>
   </div>
 
+  <!--
+    Reference table: residue, secondary-structure state (coil/helix/beta), then
+    per-channel (mu, sigma) in ppm for HA, CA, CB, CO, N, HN.
+    Source: Wishart RefDB per-residue, per-secondary-structure summary statistics.
+    Cysteine is split into Cys(ox) (disulfide-bonded) and Cys(red) (free thiol),
+    which are summed back into a single Cys posterior at the end of solve().
+    Empty cells (Gly CB) mean "no parameters" - that channel is treated as
+    incompatible for that class, not as zero.
+    This block is the canonical reference and must not be edited without
+    re-versioning the page (citation matters).
+  -->
   <!-- Reference table: residue,state,N_mu,N_sigma,CA_mu,CA_sigma,CB_mu,CB_sigma,CO_mu,CO_sigma -->
   <script type="text/plain" id="statsData">residue,state,N_mu,N_sigma,CA_mu,CA_sigma,CB_mu,CB_sigma,CO_mu,CO_sigma,HA_mu,HA_sigma,HN_mu,HN_sigma
 Ala,coil,123.61,3.77,52.84,1.64,19.06,1.26,177.67,1.57,4.26,0.33,8.15,0.72
@@ -261,9 +305,23 @@ Tyr,beta,121.43,4.78,56.83,1.71,40.97,1.85,174.54,1.45,5.1,0.54,8.68,0.76
   var resultsBox     = document.getElementById('results');
   var resultText     = document.getElementById('resultText');
   var downloadResult = document.getElementById('downloadResult');
+  var errorBox       = document.getElementById('errorBox');
+
+  function showError(msg) {
+    errorBox.textContent = msg;
+    errorBox.hidden = false;
+  }
+  function clearError() {
+    errorBox.textContent = '';
+    errorBox.hidden = true;
+  }
 
   var STATS_TEXT = document.getElementById('statsData').textContent;
   var classes    = loadClasses(STATS_TEXT);
+
+  // Constant across all solve() calls.
+  var PRIOR_Z = 0.0;
+  for (var _pi = 0; _pi < classes.length; _pi++) PRIOR_Z += classes[_pi].priorWeight;
 
   function loadClasses(text) {
     var rows = text.split(/\r?\n/);
@@ -272,6 +330,7 @@ Tyr,beta,121.43,4.78,56.83,1.71,40.97,1.85,174.54,1.45,5.1,0.54,8.68,0.76
     for (var i = 0; i < header.length; i++) idx[header[i]] = i;
 
     var out = [];
+    var HALF_LOG_2PI = 0.5 * Math.log(2 * Math.PI);
     for (var r = 1; r < rows.length; r++) {
       var line = rows[r];
       if (!line.trim()) continue;
@@ -281,32 +340,41 @@ Tyr,beta,121.43,4.78,56.83,1.71,40.97,1.85,174.54,1.45,5.1,0.54,8.68,0.76
         var ch = CHANNELS[c];
         var mu = p[idx[ch + '_mu']];
         var sg = p[idx[ch + '_sigma']];
-        if (mu !== '' && sg !== '') params[ch] = { mu: parseFloat(mu), sigma: parseFloat(sg) };
+        if (mu !== '' && sg !== '') {
+          var sigma = parseFloat(sg);
+          // logNorm = log(sqrt(2*pi) * sigma); cached so logPdf is just (-0.5*z*z - logNorm)
+          params[ch] = { mu: parseFloat(mu), sigma: sigma, logNorm: HALF_LOG_2PI + Math.log(sigma) };
+        }
       }
-      out.push({ residue: p[idx['residue']], state: p[idx['state']], params: params });
+      // Half-weight the two Cys oxidation states so that when ox+red are
+      // lumped back into Cys at the end, Cys has the same total prior mass
+      // as every other residue.
+      var priorWeight = (p[idx['residue']] === 'Cys(ox)' || p[idx['residue']] === 'Cys(red)') ? 0.5 : 1.0;
+      out.push({ residue: p[idx['residue']], state: p[idx['state']], params: params, priorWeight: priorWeight });
     }
     return out;
   }
 
-  function logPdf(x, mu, sigma) {
-    var z = (x - mu) / sigma;
-    return -0.5 * z * z - Math.log(Math.sqrt(2 * Math.PI) * sigma);
+  // Gaussian log-density. Uses params.logNorm = log(sqrt(2*pi) * sigma) cached
+  // at load time so this is one square + one subtract per channel evaluation.
+  function logPdfCached(x, params) {
+    var z = (x - params.mu) / params.sigma;
+    return -0.5 * z * z - params.logNorm;
   }
 
   // Solve one residue: returns residue -> probability, with Cys(ox)+Cys(red) lumped to Cys.
   function solve(obs, use) {
-    var logPrior = Math.log(1.0 / classes.length);
     var logW = new Array(classes.length);
     var maxLog = -Infinity;
 
     for (var i = 0; i < classes.length; i++) {
       var params = classes[i].params;
-      var lw = logPrior;
+      var lw = Math.log(classes[i].priorWeight / PRIOR_Z);
       for (var c = 0; c < CHANNELS.length; c++) {
         var ch = CHANNELS[c];
         if (!use[ch]) continue;
         if (!params[ch]) { lw = -Infinity; break; }
-        lw += logPdf(obs[ch], params[ch].mu, params[ch].sigma);
+        lw += logPdfCached(obs[ch], params[ch]);
       }
       logW[i] = lw;
       if (lw > maxLog) maxLog = lw;
@@ -326,9 +394,13 @@ Tyr,beta,121.43,4.78,56.83,1.71,40.97,1.85,174.54,1.45,5.1,0.54,8.68,0.76
       delete perRes['Cys(red)'];
     }
 
+    // If every class is incompatible with the observation, maxLog is -Infinity
+    // and exp(logW[j] - maxLog) becomes NaN. Bail out cleanly.
+    if (!isFinite(maxLog)) return {};
+
     var Z = 0.0;
     for (var k in perRes) if (perRes.hasOwnProperty(k)) Z += perRes[k];
-    if (Z <= 0) return {};
+    if (!isFinite(Z) || Z <= 0) return {};
     for (var k2 in perRes) if (perRes.hasOwnProperty(k2)) perRes[k2] /= Z;
     return perRes;
   }
@@ -352,9 +424,25 @@ Tyr,beta,121.43,4.78,56.83,1.71,40.97,1.85,174.54,1.45,5.1,0.54,8.68,0.76
       if (!line) continue;
 
       if (headerCols === null) {
-        // First non-empty line must be the header
+        // First non-empty line must be the header.
         var h = line.replace(/^#/, '').trim().split(/\s+/);
-        // Expect NUM, AA, then channel names
+        // Sanity-check the header: must look like NUM, AA, then >=1 known channel.
+        if (h.length < 3) {
+          throw new Error('Header is too short. Expected at least: NUM AA CHANNEL (e.g. "#NUM AA CA").');
+        }
+        if (h[0].toUpperCase() !== 'NUM') {
+          throw new Error('Header column 1 must be "NUM" (residue number). Got "' + h[0] + '".');
+        }
+        if (h[1].toUpperCase() !== 'AA') {
+          throw new Error('Header column 2 must be "AA" (amino acid). Got "' + h[1] + '".');
+        }
+        var anyChannel = false;
+        for (var hi = 2; hi < h.length; hi++) {
+          if (CHANNELS.indexOf(h[hi]) !== -1) { anyChannel = true; break; }
+        }
+        if (!anyChannel) {
+          throw new Error('Header has no recognized channels. Expected one or more of: ' + CHANNELS.join(', ') + '.');
+        }
         headerCols = h;
         continue;
       }
@@ -397,7 +485,7 @@ Tyr,beta,121.43,4.78,56.83,1.71,40.97,1.85,174.54,1.45,5.1,0.54,8.68,0.76
     lines.push('ORCO Version 1.0');
     lines.push('Objective Residue Classification Oracle');
     lines.push('Reference: Wishart RefDB per-residue, per-secondary-structure means/sigmas (HA, CA, CB, CO, N, HN).');
-    lines.push('Channels used: ' + CHANNELS.join(' '));
+    lines.push('Atoms used: ' + CHANNELS.join(' '));
     lines.push('');
     lines.push(pad('Residue No.', 13) + pad('AA', 4) +
                pad('HA', 8) + pad('CA', 8) + pad('CB', 8) + pad('CO', 8) + pad('N', 8) + pad('HN', 8) +
@@ -446,12 +534,21 @@ Tyr,beta,121.43,4.78,56.83,1.71,40.97,1.85,174.54,1.45,5.1,0.54,8.68,0.76
     downloadResult.style.display = 'inline';
   }
 
+  form.onreset = function () {
+    resultsBox.hidden = true;
+    resultText.textContent = '';
+    downloadResult.style.display = 'none';
+    downloadResult.removeAttribute('href');
+    clearError();
+  };
+
   form.onsubmit = function (event) {
     event.preventDefault();
+    clearError();
 
     var input = shiftsBox.value;
     if (!input.trim()) {
-      alert('Please paste a SHIFTY-formatted shift table.');
+      showError('Please paste a SHIFTY-style shift table.');
       return false;
     }
 
@@ -459,7 +556,7 @@ Tyr,beta,121.43,4.78,56.83,1.71,40.97,1.85,174.54,1.45,5.1,0.54,8.68,0.76
       var residues = parseShifty(input);
       var seqs = Object.keys(residues);
       if (seqs.length === 0) {
-        alert('No residues parsed. Check that the first line is a header (e.g. #NUM AA HA CA CB CO N HN).');
+        showError('No residues parsed. Check that the first line is a header (e.g. #NUM AA HA CA CB CO N HN).');
         return false;
       }
       var out = makeOutput(residues);
@@ -467,7 +564,7 @@ Tyr,beta,121.43,4.78,56.83,1.71,40.97,1.85,174.54,1.45,5.1,0.54,8.68,0.76
       setDownload(out);
       resultsBox.hidden = false;
     } catch (err) {
-      alert(err.message);
+      showError(err.message);
     }
     return false;
   };
