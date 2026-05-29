@@ -157,7 +157,7 @@ input[type="reset"], button {
     </p>
 
     <div class="box">
-      <p><b>Columns:</b> TopP = top posterior; Margin = TopP - second posterior; Entropy = posterior entropy in nats; Ch = observed channels.</p>
+      <p><b>Columns:</b> TopP = top posterior; Margin = TopP &minus; second; Entropy in nats; Ch = observed channels; k = <b>Goldilocks set</b> size &mdash; the smallest top-ranked set whose cumulative posterior mass exceeds 1 &minus; 1/perplexity. The set grows with posterior uncertainty and needs no confidence parameter. Full sets: <i>orco_results_goldilocks.txt</i>.</p>
     </div>
 
     <p id="citation">
@@ -274,6 +274,8 @@ input[type="reset"], button {
         <a id="downloadResult" href="#" style="display:none">Download orco_results.txt</a>
         &nbsp;&nbsp;
         <a id="downloadResultFull" href="#" style="display:none">Download orco_results_full.txt</a>
+        &nbsp;&nbsp;
+        <a id="downloadResultGoldilocks" href="#" style="display:none">Download orco_results_goldilocks.txt</a>
       </p>
     </div>
 
@@ -384,6 +386,7 @@ Tyr,beta,121.43,4.78,56.83,1.71,40.97,1.85,174.54,1.45,5.1,0.54,8.68,0.76
   var resultText     = document.getElementById('resultText');
   var downloadResult     = document.getElementById('downloadResult');
   var downloadResultFull = document.getElementById('downloadResultFull');
+  var downloadResultGoldilocks   = document.getElementById('downloadResultGoldilocks');
   var downloadStats      = document.getElementById('downloadStats');
   var errorBox       = document.getElementById('errorBox');
 
@@ -581,8 +584,27 @@ Tyr,beta,121.43,4.78,56.83,1.71,40.97,1.85,174.54,1.45,5.1,0.54,8.68,0.76
     return (v === undefined) ? '        ' : pad(v.toFixed(2), 8);
   }
 
-  // Build ORCO text output. topK = how many ranked classes to list per residue.
-  function makeOutput(residues, topK) {
+  // Goldilocks set size: smallest top-down prefix whose cumulative posterior
+  // mass strictly exceeds the self-sizing target c = 1 - 1/perplexity
+  // = 1 - exp(-H). One candidate for a sharp posterior, several for a diffuse
+  // one, with no user-chosen confidence level. ranked is [[label,p],...]
+  // sorted by decreasing p. This is a descriptive heuristic, not a calibrated
+  // prediction set: it carries no formal coverage guarantee.
+  function goldilocksSetSize(ranked, entropy) {
+    var c = 1 - Math.exp(-entropy);
+    var cum = 0, m = 0;
+    while (m < ranked.length && cum <= c) { cum += ranked[m][1]; m++; }
+    return m < 1 ? 1 : m;
+  }
+
+  // Build ORCO text output.
+  //   show = a fixed integer (list that many ranked classes per residue), or
+  //          'goldilocks' (list each residue's Goldilocks set).
+  // The k column always reports the Goldilocks set size.
+  function makeOutput(residues, show) {
+    var perResidueK = (show === 'goldilocks');
+    var fixedCols = perResidueK ? 0 : show;   // header result columns only in fixed-width mode
+
     var lines = [];
     lines.push('ORCO Version 1.1');
     lines.push('Objective Residue Classification Oracle');
@@ -594,12 +616,15 @@ Tyr,beta,121.43,4.78,56.83,1.71,40.97,1.85,174.54,1.45,5.1,0.54,8.68,0.76
     lines.push('  Margin  TopP - second posterior');
     lines.push('  Entropy posterior entropy, nats');
     lines.push('  Ch      observed channels');
+    lines.push('  k       Goldilocks set size (smallest prefix with mass > 1 - 1/perplexity = 1 - exp(-Entropy))');
+    if (perResidueK) lines.push('  Results listed per residue: the Goldilocks set.');
     lines.push('');
     var headerLine = pad('Residue No.', 13) + pad('AA', 4) +
                      pad('HA', 8) + pad('CA', 8) + pad('CB', 8) + pad('CO', 8) + pad('N', 8) + pad('HN', 8) +
                      '   ' +
-                     pad('TopP', 8) + pad('Margin', 8) + pad('Entropy', 9) + pad('Ch', 4);
-    for (var hk = 0; hk < topK; hk++) headerLine += pad('Result #' + (hk + 1), 18);
+                     pad('TopP', 8) + pad('Margin', 8) + pad('Entropy', 9) + pad('Ch', 4) + pad('k', 4);
+    for (var hk = 0; hk < fixedCols; hk++) headerLine += pad('Result #' + (hk + 1), 18);
+    if (perResidueK) headerLine += pad('Results (Goldilocks)', 21);
     lines.push(headerLine);
 
     var unsupportedCount = 0;
@@ -622,7 +647,7 @@ Tyr,beta,121.43,4.78,56.83,1.71,40.97,1.85,174.54,1.45,5.1,0.54,8.68,0.76
       if (!anyUsed) {
         unsupportedCount++;
         lines.push(pad(seq, 13) + pad(entry.aa, 4) + shiftStr + '   ' +
-                   pad('NA', 8) + pad('NA', 8) + pad('NA', 9) + pad(nChannels, 4) +
+                   pad('NA', 8) + pad('NA', 8) + pad('NA', 9) + pad(nChannels, 4) + pad('NA', 4) +
                    '(no observation)');
         continue;
       }
@@ -636,18 +661,21 @@ Tyr,beta,121.43,4.78,56.83,1.71,40.97,1.85,174.54,1.45,5.1,0.54,8.68,0.76
       var secondP = (rankedAll.length > 1) ? rankedAll[1][1] : 0.0;
       var margin = isFinite(topP) ? (topP - secondP) : NaN;
 
-      var ranked = rankedAll.slice(0, topK);
+      var kPerp = goldilocksSetSize(rankedAll, entropy);
+
+      // How many candidates to list: this residue's Goldilocks set in 'goldilocks' mode, else the fixed count.
+      var nShow = perResidueK ? kPerp : show;
+      var ranked = rankedAll.slice(0, nShow);
       var resStr = '';
-      for (var t = 0; t < topK; t++) {
-        if (t < ranked.length) {
-          resStr += pad(ranked[t][0] + '(' + ranked[t][1].toFixed(2) + ')', 18);
-        } else {
-          resStr += pad('', 18);
-        }
+      for (var t = 0; t < ranked.length; t++) {
+        resStr += pad(ranked[t][0] + '(' + ranked[t][1].toFixed(2) + ')', 18);
+      }
+      if (!perResidueK) {
+        for (var tp = ranked.length; tp < show; tp++) resStr += pad('', 18);
       }
       lines.push(pad(seq, 13) + pad(entry.aa, 4) + shiftStr + '   ' +
                  pad(fmtNumber(topP, 2), 8) + pad(fmtNumber(margin, 2), 8) +
-                 pad(fmtNumber(entropy, 2), 9) + pad(nChannels, 4) + resStr);
+                 pad(fmtNumber(entropy, 2), 9) + pad(nChannels, 4) + pad(kPerp, 4) + resStr);
     }
 
     lines.push('');
@@ -657,20 +685,12 @@ Tyr,beta,121.43,4.78,56.83,1.71,40.97,1.85,174.54,1.45,5.1,0.54,8.68,0.76
     return lines.join('\n') + '\n';
   }
 
-  function setDownload(text) {
-    var blob = new Blob([text], { type: 'text/plain' });
-    var url = URL.createObjectURL(blob);
-    downloadResult.href = url;
-    downloadResult.download = 'orco_results.txt';
-    downloadResult.style.display = 'inline';
-  }
-
-  function setDownloadFull(text) {
-    var blob = new Blob([text], { type: 'text/plain' });
-    var url = URL.createObjectURL(blob);
-    downloadResultFull.href = url;
-    downloadResultFull.download = 'orco_results_full.txt';
-    downloadResultFull.style.display = 'inline';
+  // Wire a download anchor to a text blob.
+  function setDownload(anchor, text, filename) {
+    var url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.style.display = 'inline';
   }
 
   // Build a SHIFTY-style reference-statistics table from the in-memory CSV
@@ -737,13 +757,17 @@ Tyr,beta,121.43,4.78,56.83,1.71,40.97,1.85,174.54,1.45,5.1,0.54,8.68,0.76
   }
   setStatsDownload();
 
+  function hideDownload(anchor) {
+    anchor.style.display = 'none';
+    anchor.removeAttribute('href');
+  }
+
   form.onreset = function () {
     resultsBox.hidden = true;
     resultText.textContent = '';
-    downloadResult.style.display = 'none';
-    downloadResult.removeAttribute('href');
-    downloadResultFull.style.display = 'none';
-    downloadResultFull.removeAttribute('href');
+    hideDownload(downloadResult);
+    hideDownload(downloadResultFull);
+    hideDownload(downloadResultGoldilocks);
     clearError();
   };
 
@@ -766,9 +790,11 @@ Tyr,beta,121.43,4.78,56.83,1.71,40.97,1.85,174.54,1.45,5.1,0.54,8.68,0.76
       }
       var out     = makeOutput(residues, 3);
       var outFull = makeOutput(residues, 20);
+      var outGoldilocks = makeOutput(residues, 'goldilocks');
       resultText.textContent = out;
-      setDownload(out);
-      setDownloadFull(outFull);
+      setDownload(downloadResult,     out,     'orco_results.txt');
+      setDownload(downloadResultFull, outFull, 'orco_results_full.txt');
+      setDownload(downloadResultGoldilocks, outGoldilocks, 'orco_results_goldilocks.txt');
       resultsBox.hidden = false;
     } catch (err) {
       showError(err.message);
