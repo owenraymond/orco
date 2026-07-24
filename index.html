@@ -1,29 +1,29 @@
 <!DOCTYPE html>
-<!--
-  ORCO Version 1.2 - Objective Residue Classification Oracle
-  Single-file Bayesian residue classifier for solid-state NMR backbone shifts.
-  Author: Owen Raymond, 2026.
-  Reference table: Wishart RefDB per-residue, per-secondary-structure means/sigmas
-  (HA, CA, CB, CO, N, HN), bundled below in the #statsData block.
-  This page is self-contained: no external scripts, fonts, or images. Should be
-  archivable as a single file and openable in any browser indefinitely.
--->
 <html lang="en">
 
 <head>
     <meta charset="utf-8">
-    <title>ORCO Version 1.2</title>
+    <title>ORCO residue-type classifier</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="generator" content="ORCO 1.2">
-    <meta name="description" content="residue classifier for NMR chemical shifts.">
+    <meta name="description"
+        content="ORCO calculates residue-type posterior probabilities and Goldilocks candidate sets from partial protein NMR chemical shifts.">
     <style>
         :root {
-            --light-orange: #ffd43b;
-            --light-blue: #a5d8ff;
-            --dark-blue: #4dabf7;
-            --dark-orange: #fab005;
+            --orange: #ffd43b;
+            --orange-border: #c46a00;
+            --blue: #1864ab;
+            --blue-mid: #228be6;
+            --blue-light: #d0ebff;
             --ink: #000000;
             --paper: #ffffff;
+            --muted: #4b4b4b;
+            --panel: #fbfbfb;
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
         }
 
         body {
@@ -33,11 +33,12 @@
             font-size: 16px;
             line-height: 1.35;
             margin: 0;
-            padding: 16px 0 32px;
+            padding: 16px 12px 32px;
         }
 
         .page {
-            width: 850px;
+            width: 100%;
+            max-width: 850px;
             margin: 0 auto;
         }
 
@@ -55,34 +56,33 @@
             text-align: center;
         }
 
-        /* Keep link text black for readability.
-   Blue supplies the visual identity through the underline. */
         a,
         a:visited {
             color: var(--ink);
-            text-decoration-color: var(--dark-blue);
+            text-decoration-color: var(--blue);
             text-decoration-thickness: 2px;
             text-underline-offset: 2px;
         }
 
         a:hover {
-            background: var(--light-blue);
+            background: var(--blue-light);
         }
 
         hr {
             border: 0;
-            border-top: 2px solid var(--light-blue);
+            border-top: 2px solid var(--blue-light);
             margin: 22px 0;
         }
 
         .box {
-            border: 1px solid var(--light-blue);
-            padding: 12px;
+            border: 1px solid var(--blue);
+            padding: 14px;
             margin-bottom: 16px;
         }
 
         .basic-usage {
-            border: 1px solid var(--dark-blue);
+            border: 1px solid var(--blue);
+            min-width: 0;
             padding: 14px;
             margin: 0 0 16px;
         }
@@ -92,42 +92,46 @@
             padding: 0 5px;
         }
 
-        .basic-usage p {
-            margin: 8px 0;
+        h2 {
+            font-size: 17px;
+            margin: 0 0 12px;
         }
 
         .hint {
+            color: var(--muted);
             font-size: 14px;
+            margin: 6px 0 0;
         }
 
-        /* One labelled input surface per field. */
         .field {
             margin: 0 0 18px;
         }
 
-        .field-label {
+        .field-label,
+        .format-group legend {
             display: block;
             font-weight: bold;
             margin: 0 0 6px;
         }
 
-        .hint {
-            margin: 6px 0 0;
+        .format-group {
+            border: 0;
+            margin: 0;
+            padding: 0;
         }
 
-        /* Format choice, sitting above the shifts box. */
         .format-row {
             display: flex;
             flex-wrap: wrap;
             align-items: center;
-            gap: 4px 10px;
+            gap: 6px 18px;
+            margin: 0;
         }
 
         .format-row label {
             font-weight: bold;
         }
 
-        /* Ways to fill the shifts box, attached directly above it. */
         .toolbar {
             display: flex;
             flex-wrap: wrap;
@@ -136,23 +140,21 @@
             margin: 0 0 6px;
         }
 
-        /* Styled trigger for the visually hidden file input. */
         .filebtn {
             display: inline-block;
             background: var(--paper);
-            border: 2px solid var(--light-blue);
-            padding: 4px 14px;
+            border: 2px solid var(--blue);
+            padding: 5px 14px;
             font-family: Arial, Helvetica, sans-serif;
             font-size: 14px;
             cursor: pointer;
         }
 
         .filebtn:hover {
-            background: var(--light-blue);
+            background: var(--blue-light);
         }
 
-        /* Kept focusable and screen-reader visible; only removed from the layout. */
-        .sr-file {
+        .visually-hidden {
             position: absolute;
             width: 1px;
             height: 1px;
@@ -164,8 +166,8 @@
             border: 0;
         }
 
-        .sr-file:focus+.filebtn {
-            outline: 3px solid var(--light-blue);
+        .visually-hidden:focus+.filebtn {
+            outline: 3px solid var(--blue);
             outline-offset: 2px;
         }
 
@@ -180,21 +182,22 @@
         }
 
         .input-name {
-            width: 320px;
+            width: 360px;
             max-width: 100%;
-            box-sizing: border-box;
-            padding: 4px 6px;
-            border: 1px solid var(--dark-blue);
+            padding: 6px 8px;
+            border: 1px solid var(--blue);
         }
 
         textarea {
             width: 100%;
-            box-sizing: border-box;
+            min-height: 190px;
             background: var(--paper);
             color: var(--ink);
-            border: 1px solid var(--dark-blue);
+            border: 1px solid var(--blue);
             font-family: "Courier New", Courier, monospace;
             font-size: 13px;
+            line-height: 1.3;
+            resize: vertical;
         }
 
         input,
@@ -204,46 +207,82 @@
             font-size: 14px;
         }
 
-        /* Main action */
-        input[type="submit"] {
-            background: var(--light-orange);
-            border: 2px solid var(--dark-orange);
-            padding: 4px 14px;
-        }
-
-        input[type="submit"]:hover {
-            background: var(--dark-orange);
-        }
-
-        /* Secondary actions */
         button {
+            min-height: 32px;
             background: var(--paper);
-            border: 2px solid var(--light-blue);
-            padding: 4px 14px;
+            border: 2px solid var(--blue);
+            padding: 5px 14px;
+            cursor: pointer;
         }
 
         button:hover {
-            background: var(--light-blue);
+            background: var(--blue-light);
         }
 
-        /* Keyboard focus */
-        textarea:focus,
-        input:focus,
-        button:focus,
-        a:focus {
-            outline: 3px solid var(--light-blue);
+        .primary-button {
+            background: var(--orange);
+            border-color: var(--orange-border);
+        }
+
+        .primary-button:hover {
+            background: #ffc928;
+        }
+
+        textarea:focus-visible,
+        input:focus-visible,
+        button:focus-visible,
+        a:focus-visible,
+        [tabindex="-1"]:focus-visible {
+            outline: 3px solid var(--blue);
             outline-offset: 2px;
         }
 
-        .resultbox {
-            border-color: var(--dark-blue);
+        button:disabled,
+        a[aria-disabled="true"] {
+            cursor: not-allowed;
+            opacity: 0.6;
         }
 
-        .resultbox pre {
+        .table-wrap {
+            width: 100%;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
             font-family: "Courier New", Courier, monospace;
             font-size: 13px;
-            white-space: pre;
-            overflow-x: auto;
+        }
+
+        th,
+        td {
+            border-bottom: 1px solid #b7b7b7;
+            padding: 5px 7px;
+            text-align: left;
+            vertical-align: top;
+            white-space: nowrap;
+        }
+
+        th {
+            background: var(--blue-light);
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        td.candidates {
+            min-width: 250px;
+            white-space: normal;
+        }
+
+        .result-summary {
+            margin: 0 0 10px;
+        }
+
+        .notice {
+            border-left: 4px solid var(--blue);
+            background: #f4f9fd;
+            padding: 7px 10px;
+            margin: 10px 0;
         }
 
         .plot-wrap {
@@ -251,8 +290,8 @@
         }
 
         .plot-panel {
-            border: 1px solid var(--light-blue);
-            background: #fbfbfb;
+            border: 1px solid var(--blue);
+            background: var(--panel);
             padding: 10px;
         }
 
@@ -262,23 +301,25 @@
             max-width: 760px;
             height: auto;
             background: #ffffff;
-            border: 1px solid #8f8f8f;
+            border: 1px solid #767676;
             margin: 0 auto;
         }
 
-        .plot-actions {
-            margin-top: 8px;
+        .download-actions {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 8px 18px;
+            margin: 10px 0 0;
             text-align: center;
             font-size: 14px;
         }
 
-        /* Orange warning rather than introducing a separate red palette. Kept as an
-       outlined block so it does not read as another orange action button. */
         .error {
             background: var(--paper);
             color: var(--ink);
-            border: 2px solid var(--dark-orange);
-            border-left: 6px solid var(--dark-orange);
+            border: 2px solid var(--orange-border);
+            border-left-width: 6px;
             padding: 8px 12px;
             margin-top: 10px;
             font-family: "Courier New", Courier, monospace;
@@ -291,20 +332,10 @@
             font-weight: bold;
         }
 
-        @media (max-width: 900px) {
-            .page {
-                width: 94%;
-            }
-        }
-
         @media (max-width: 480px) {
             body {
                 font-size: 15px;
-                padding: 8px 0 24px;
-            }
-
-            .page {
-                width: 96%;
+                padding: 8px 7px 24px;
             }
 
             .box {
@@ -313,11 +344,10 @@
             }
 
             textarea {
-                width: 99%;
                 font-size: 12px;
             }
 
-            .resultbox pre {
+            table {
                 font-size: 12px;
             }
 
@@ -334,52 +364,55 @@
                 margin: 14px 0;
             }
 
-            input[type="submit"],
             button {
                 padding: 6px 12px;
                 font-size: 14px;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                scroll-behavior: auto !important;
             }
         }
     </style>
 </head>
 
 <body>
-    <div class="page">
+    <main class="page">
         <div class="topbox">
             <img src="data:image/png;base64,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"
                 alt="ORCO banner" class="banner">
         </div>
 
-        <p>
-            ORCO uses NMR chemical shifts to rank plausible amino-acid identities.
-            <code>G</code> is the ranked Goldilocks candidate set; values in parentheses
-            are posterior probabilities.
-        </p>
+        <h1 class="visually-hidden">ORCO residue-type classifier</h1>
+
+        <p>ORCO calculates a ranked posterior distribution over the 20 canonical amino-acid
+            residue types from partial, atom-labeled NMR chemical shifts and converts it into
+            an entropy-adaptive Goldilocks candidate set.</p>
 
         <hr>
 
-        <form id="orcoForm">
+        <noscript>
+            <p class="error">JavaScript is required. ORCO runs entirely in this browser.</p>
+        </noscript>
+
+        <form id="orcoForm" novalidate>
             <fieldset class="basic-usage">
                 <legend>Basic usage</legend>
 
                 <div class="field">
-                    <span class="field-label">Input format</span>
-                    <p class="format-row">
-                        <label for="fmtShifty"><input type="radio" name="format" value="shifty" id="fmtShifty"
-                                checked> SHIFTY</label>
-                        <a href="http://csi.wishartlab.com/other_html_files/shifty_format.html" target="_blank"
-                            rel="noopener" aria-label="SHIFTY format example">(example)</a>
-
-                        <label for="fmtStar21"><input type="radio" name="format" value="2.1" id="fmtStar21"> NMR-STAR
-                            2.1</label>
-                        <a href="http://csi.wishartlab.com/other_html_files/bmrb_format.html" target="_blank"
-                            rel="noopener" aria-label="NMR-STAR 2.1 format example">(example)</a>
-
-                        <label for="fmtStar31"><input type="radio" name="format" value="3.1" id="fmtStar31"> NMR-STAR
-                            3.1</label>
-                        <a href="http://csi.wishartlab.com/other_html_files/bmrb3_format.html" target="_blank"
-                            rel="noopener" aria-label="NMR-STAR 3.1 format example">(example)</a>
-                    </p>
+                    <fieldset class="format-group">
+                        <legend>Input format</legend>
+                        <p class="format-row">
+                            <label><input type="radio" name="format" value="shifty" id="fmtShifty" checked>
+                                SHIFTY</label>
+                            <label><input type="radio" name="format" value="2.1" id="fmtStar21">
+                                NMR-STAR 2.1</label>
+                            <label><input type="radio" name="format" value="3.1" id="fmtStar31">
+                                NMR-STAR 3.1</label>
+                        </p>
+                    </fieldset>
                 </div>
 
                 <div class="field">
@@ -387,78 +420,95 @@
 
                     <p class="toolbar">
                         <button type="button" id="exampleButton">Load ubiquitin example</button>
-                        <input type="file" id="shiftFile" class="sr-file" accept=".txt,.str,text/plain">
-                        <label class="filebtn" for="shiftFile">Choose file&hellip;</label>
+                        <input type="file" id="shiftFile" class="visually-hidden"
+                            accept=".txt,.str,.tab,text/plain">
+                        <label class="filebtn" for="shiftFile">Choose file…</label>
                         <span id="fileStatus" class="file-status" aria-live="polite"></span>
                     </p>
 
-                    <textarea id="shifts" rows="12" aria-describedby="shiftsHint">#NUM AA HA CA CB CO N HN
+                    <textarea id="shifts" rows="12" aria-describedby="formatHint" spellcheck="false"
+                        autocapitalize="off" autocomplete="off">#NUM AA HA CA CB CO N HN
 </textarea>
 
-                    <p class="hint" id="shiftsHint">
-                        Header: <code>#NUM AA HA CA CB CO N HN</code>. Use <code>0.00</code> for a missing shift.
-                        <code>AA</code> is a label column: any non-whitespace label is accepted and it is not used
-                        for classification.
-                    </p>
+                    <p class="hint" id="formatHint">SHIFTY requires NUM and AA columns plus at least one of
+                        HA, CA, CB, CO, N, or HN. Use 0.00, ., ?, NA, N/A, NULL, NONE, or - for a
+                        missing shift. AA is retained as a label and is not used for classification.</p>
                 </div>
 
                 <div class="field">
-                    <label class="field-label" for="inputName">Name for output files <span
-                            class="hint">(optional)</span></label>
-                    <input class="input-name" type="text" id="inputName" aria-describedby="inputNameHint">
+                    <label class="field-label" for="inputName">Name for output files (optional)</label>
+                    <input class="input-name" type="text" id="inputName" maxlength="120"
+                        aria-describedby="inputNameHint">
                     <p class="hint" id="inputNameHint">
-                        For example, <code>Owen</code> produces <code>Owen_orco_results.txt</code>.
+                        For example, <code>ubiquitin</code> produces
+                        <code>ubiquitin_orco_probabilities.txt</code>.
                     </p>
                 </div>
 
                 <p class="usage-actions">
-                    <input type="submit" value="Classify">
+                    <button class="primary-button" type="submit" id="classifyButton">Classify</button>
                     <button type="button" id="clearButton">Clear</button>
                 </p>
 
-                <div id="errorBox" class="error" role="alert" hidden></div>
+                <div id="errorBox" class="error" role="alert" tabindex="-1" hidden></div>
             </fieldset>
         </form>
 
-        <div class="box resultbox" id="results" hidden>
-            <p><b>ORCO results</b></p>
-            <pre id="resultText"></pre>
-            <div class="plot-wrap" id="plotWrap" hidden>
+        <section class="box" id="results" aria-labelledby="resultsHeading" hidden>
+            <h2 id="resultsHeading" tabindex="-1">ORCO results</h2>
+            <p class="result-summary" id="resultSummary" aria-live="polite"></p>
+            <div class="notice" id="resultNotice" hidden></div>
+            <div class="table-wrap">
+                <table id="resultTable">
+                    <caption class="visually-hidden">Residue-type classification results</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">NUM</th>
+                            <th scope="col">AA</th>
+                            <th scope="col">Goldilocks set</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultRows"></tbody>
+                </table>
+            </div>
+            <p class="hint">Values in parentheses are posterior probabilities. The Goldilocks set is
+                ordered from highest to lowest posterior probability.</p>
+
+            <div class="plot-wrap">
                 <div class="plot-panel">
-                    <canvas id="resultCanvas" class="plot-canvas" width="760" height="340"></canvas>
-                    <p class="plot-actions"><a id="downloadPlot" href="#" style="display:none">Download plot PNG</a></p>
+                    <canvas id="resultCanvas" class="plot-canvas" width="1520" height="680"
+                        role="img" aria-label="Goldilocks posterior plot"
+                        aria-describedby="plotDescription"></canvas>
+                    <p class="hint" id="plotDescription">Each column stacks the posterior probabilities
+                        of the residue types retained in that spin system's Goldilocks set. Rank 1 is
+                        shown at the top of each stack.</p>
                 </div>
             </div>
-            <p><a id="downloadResult" href="#" style="display:none">Download full orco_results.txt</a></p>
-        </div>
+            <p class="download-actions">
+                <a id="downloadResult" hidden>Download full probabilities</a>
+                <a id="downloadPlot" hidden>Download plot PNG</a>
+            </p>
+        </section>
 
-        <div class="box" id="methods">
-            <p><b>Methods, citation, and reference data</b></p>
-            <p><b>Please cite:</b> Manuscript in process.</p>
-            <p><b>Reference data:</b> Zhang H, Neal S, Wishart DS. <i>RefDB: A database of uniformly referenced protein
-                    chemical
-                    shifts.</i> J. Biomol. NMR 25:173&ndash;195 (2003). Per-residue, per-secondary-structure means and
-                standard
-                deviations were taken from <a href="https://refdb.wishartlab.com/stat.html">RefDB</a>.</p>
+        <section class="box" id="methods" aria-labelledby="methodsHeading">
+            <h2 id="methodsHeading">Methods, manuscript, and reference data</h2>
+            <p><b>Associated manuscript:</b> Owen Raymond and Bo Chen. <i>ORCO: An Entropy
+                    Based Adaptive Residue-Type Classifier for Partial Protein NMR Chemical Shift
+                    Observations.</i></p>
+            <p><b>Reference data:</b> Zhang H, Neal S, Wishart DS. <i>RefDB: A database of
+                    uniformly referenced protein chemical shifts.</i> J. Biomol. NMR
+                25:173–195 (2003). ORCO uses the published residue-type- and
+                secondary-structure-specific means and standard deviations.</p>
             <p>RefDB does not provide a proline amide-N distribution. ORCO uses
                 &mu; = 135.627 ppm, &sigma; = 5.150 ppm, and N = 2819 for proline amide N.</p>
-            <p><a id="downloadStats" href="#">Download orco_reference_stats.txt</a></p>
-        </div>
+            <p><a id="downloadStats">Download orco_stats.csv</a></p>
+        </section>
 
         <hr>
 
-        <p class="footer">
-            ORCO Version 1.2 &mdash; Owen Raymond, 2026
-        </p>
-    </div>
+        <p class="footer">ORCO — Owen Raymond and Bo Chen, 2026</p>
+    </main>
 
-    <!--
-    Reference table: residue, secondary-structure state (coil/helix/beta), then
-    per-channel (mu, sigma) in ppm for HA, CA, CB, CO, N, HN.
-    Source: Wishart RefDB per-residue, per-secondary-structure summary statistics
-    (https://refdb.wishartlab.com/stat.html).
-  -->
-    <!-- Reference table: residue,state,N_mu,N_sigma,CA_mu,CA_sigma,CB_mu,CB_sigma,CO_mu,CO_sigma -->
     <script type="text/plain" id="ubiquitinExample">#NUM AA HA CA CB CO N HN
 1 M 4.23 54.45 33.27 170.54 0.00 0.00
 2 Q 5.25 55.08 30.76 175.92 123.22 8.90
@@ -605,1023 +655,1607 @@ Tyr,beta,121.43,4.78,56.83,1.71,40.97,1.85,174.54,1.45,5.1,0.54,8.68,0.76
 </script>
 
     <script>
-        (function () {
-            // Canonical ORCO solver: mirrors bayes_solver.py + orco.py output format.
-            // Classes are (residue, state, params); state is marginalized to give a residue posterior.
+(function () {
+    'use strict';
 
-            var CHANNELS = ['HA', 'CA', 'CB', 'CO', 'N', 'HN'];
-            var AA_ONE_LETTER = {
-                Ala: 'A', Arg: 'R', Asn: 'N', Asp: 'D', Cys: 'C', Gln: 'Q', Glu: 'E',
-                Gly: 'G', His: 'H', Ile: 'I', Leu: 'L', Lys: 'K', Met: 'M', Phe: 'F',
-                Pro: 'P', Ser: 'S', Thr: 'T', Trp: 'W', Tyr: 'Y', Val: 'V'
-            };
-            var form = document.getElementById('orcoForm');
-            var shiftsBox = document.getElementById('shifts');
-            var inputName = document.getElementById('inputName');
-            var shiftFile = document.getElementById('shiftFile');
-            var fileStatus = document.getElementById('fileStatus');
-            var exampleButton = document.getElementById('exampleButton');
-            var clearButton = document.getElementById('clearButton');
-            var resultsBox = document.getElementById('results');
-            var resultText = document.getElementById('resultText');
-            var plotWrap = document.getElementById('plotWrap');
-            var resultCanvas = document.getElementById('resultCanvas');
-            var downloadPlot = document.getElementById('downloadPlot');
-            var downloadResult = document.getElementById('downloadResult');
-            var downloadStats = document.getElementById('downloadStats');
-            var errorBox = document.getElementById('errorBox');
-            var formatRadios = form.elements['format'];
-            var shiftsHint = document.getElementById('shiftsHint');
+    const CHANNELS = Object.freeze(['HA', 'CA', 'CB', 'CO', 'N', 'HN']);
+    const AMINO_ACIDS = Object.freeze([
+        'A', 'R', 'N', 'D', 'C', 'Q', 'E', 'G', 'H', 'I',
+        'L', 'K', 'M', 'F', 'P', 'S', 'T', 'W', 'Y', 'V'
+    ]);
+    const AMINO_ACID_INDEX = new Map(
+        AMINO_ACIDS.map((aminoAcid, index) => [aminoAcid, index])
+    );
+    const THREE_TO_ONE = Object.freeze({
+        Ala: 'A',
+        Arg: 'R',
+        Asn: 'N',
+        Asp: 'D',
+        Cys: 'C',
+        Gln: 'Q',
+        Glu: 'E',
+        Gly: 'G',
+        His: 'H',
+        Ile: 'I',
+        Leu: 'L',
+        Lys: 'K',
+        Met: 'M',
+        Phe: 'F',
+        Pro: 'P',
+        Ser: 'S',
+        Thr: 'T',
+        Trp: 'W',
+        Tyr: 'Y',
+        Val: 'V'
+    });
+    const THREE_TO_ONE_UPPER = new Map(
+        Object.entries(THREE_TO_ONE).map(([three, one]) => [three.toUpperCase(), one])
+    );
+    const REFERENCE_RESIDUES = Object.freeze([
+        ...Object.keys(THREE_TO_ONE).filter((residue) => residue !== 'Cys'),
+        'Cys(ox)',
+        'Cys(red)'
+    ]);
+    const SECONDARY_STATES = Object.freeze(['coil', 'helix', 'beta']);
+    const HALF_LOG_TWO_PI = 0.5 * Math.log(2 * Math.PI);
+    const GOLDILOCKS_EPSILON = 1e-12;
+    const MAX_FILE_BYTES = 10 * 1024 * 1024;
+    const MAX_INPUT_CHARACTERS = 10_000_000;
+    const MAX_RESIDUES = 10_000;
+    const HEADER_TEXT = '#NUM AA HA CA CB CO N HN\n';
+    const NUMBER_PATTERN = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][+-]?\d+)?$/;
+    const INTEGER_PATTERN = /^[+-]?\d+$/;
+    const MISSING_TOKENS = new Set(['.', '?', 'NA', 'N/A', 'NULL', 'NONE', '-']);
+    const FORMAT_HINTS = Object.freeze({
+        shifty: 'SHIFTY requires NUM and AA columns plus at least one of HA, CA, CB, CO, N, or HN. ' +
+            'Use 0.00, ., ?, NA, N/A, NULL, NONE, or - for a missing shift. AA is retained as a ' +
+            'label and is not used for classification.',
+        '2.1': 'Paste one complete NMR-STAR 2.1 entry. ORCO reads the _Chem_shift_value loop, ' +
+            'uses HA, CA, CB, C/CO, N, and H/HN, and ignores side-chain atoms.',
+        '3.1': 'Paste one complete NMR-STAR 3.1 entry. ORCO reads the _Atom_chem_shift.Val loop, ' +
+            'uses HA, CA, CB, C/CO, N, and H/HN, and ignores side-chain atoms.'
+    });
+    const STAR_ATOM_TO_CHANNEL = Object.freeze({
+        HA: 'HA',
+        HA2: 'HA',
+        HA3: 'HA',
+        CA: 'CA',
+        CB: 'CB',
+        C: 'CO',
+        CO: 'CO',
+        N: 'N',
+        H: 'HN',
+        HN: 'HN'
+    });
+    const STAR_SCHEMAS = Object.freeze({
+        '2.1': {
+            label: 'NMR-STAR 2.1',
+            sequence: '_Residue_seq_code',
+            residue: '_Residue_label',
+            atom: '_Atom_name',
+            value: '_Chem_shift_value',
+            scopes: ['_Entity_assembly_ID', '_Mol_system_component_name']
+        },
+        '3.1': {
+            label: 'NMR-STAR 3.1',
+            sequence: '_Atom_chem_shift.Comp_index_ID',
+            residue: '_Atom_chem_shift.Comp_ID',
+            atom: '_Atom_chem_shift.Atom_ID',
+            value: '_Atom_chem_shift.Val',
+            scopes: [
+                '_Atom_chem_shift.Entity_assembly_ID',
+                '_Atom_chem_shift.Entity_ID'
+            ]
+        }
+    });
 
-            function showError(msg) {
-                errorBox.textContent = msg;
-                errorBox.hidden = false;
+    function hasOwn(object, key) {
+        return Object.prototype.hasOwnProperty.call(object, key);
+    }
+
+    function splitLines(text) {
+        return text.replace(/^\uFEFF/, '').split(/\r\n|\n|\r/);
+    }
+
+    function parseFiniteNumber(token, description) {
+        const text = String(token).trim();
+        if (!NUMBER_PATTERN.test(text)) {
+            throw new Error(`${description} must be a finite decimal number; got "${token}".`);
+        }
+        const value = Number(text);
+        if (!Number.isFinite(value)) {
+            throw new Error(`${description} must be a finite decimal number; got "${token}".`);
+        }
+        return value;
+    }
+
+    function parseSequenceNumber(token, description) {
+        const text = String(token).trim();
+        if (!INTEGER_PATTERN.test(text)) {
+            throw new Error(`${description} must be an integer; got "${token}".`);
+        }
+        const value = Number(text);
+        if (!Number.isSafeInteger(value)) {
+            throw new Error(`${description} is outside the supported integer range; got "${token}".`);
+        }
+        return value;
+    }
+
+    function parseEmbeddedStatistics(text) {
+        const lines = splitLines(text);
+        while (lines.length > 0 && !lines[lines.length - 1].trim()) {
+            lines.pop();
+        }
+        if (lines.length < 2) {
+            throw new Error('The embedded reference-statistics table is empty.');
+        }
+
+        const headers = lines[0].split(',');
+        const columnIndex = new Map(headers.map((header, index) => [header, index]));
+        const requiredHeaders = ['residue', 'state'];
+        for (const channel of CHANNELS) {
+            requiredHeaders.push(`${channel}_mu`, `${channel}_sigma`);
+        }
+        for (const header of requiredHeaders) {
+            if (!columnIndex.has(header)) {
+                throw new Error(`The embedded reference-statistics table has no ${header} column.`);
             }
-            function clearError() {
-                errorBox.textContent = '';
-                errorBox.hidden = true;
+        }
+
+        const classes = [];
+        const classKeys = new Set();
+        for (let lineIndex = 1; lineIndex < lines.length; lineIndex += 1) {
+            const lineNumber = lineIndex + 1;
+            if (!lines[lineIndex].trim()) {
+                continue;
+            }
+            const fields = lines[lineIndex].split(',');
+            if (fields.length !== headers.length) {
+                throw new Error(
+                    `Reference-statistics line ${lineNumber} has ${fields.length} fields; ` +
+                    `${headers.length} are required.`
+                );
             }
 
-            var HEADER_TEXT = '#NUM AA HA CA CB CO N HN\n';
+            const residue = fields[columnIndex.get('residue')].trim();
+            const state = fields[columnIndex.get('state')].trim();
+            if (!REFERENCE_RESIDUES.includes(residue)) {
+                throw new Error(
+                    `Reference-statistics line ${lineNumber} has unknown residue "${residue}".`
+                );
+            }
+            if (!SECONDARY_STATES.includes(state)) {
+                throw new Error(
+                    `Reference-statistics line ${lineNumber} has unknown state "${state}".`
+                );
+            }
+            const classKey = `${residue}\t${state}`;
+            if (classKeys.has(classKey)) {
+                throw new Error(
+                    `Reference-statistics line ${lineNumber} duplicates ${residue}, ${state}.`
+                );
+            }
+            classKeys.add(classKey);
 
-            // The hint under the shifts box tracks the selected format, because the
-            // SHIFTY header line is meaningless for an NMR-STAR entry and vice versa.
-            var FORMAT_HINTS = {
-                shifty: 'Header: <code>#NUM AA HA CA CB CO N HN</code>. Use <code>0.00</code> for a missing ' +
-                    'shift. <code>AA</code> is a label column: any non-whitespace label is accepted and it is ' +
-                    'not used for classification.',
-                '2.1': 'Paste a complete NMR-STAR 2.1 entry. ORCO reads the <code>_Chem_shift_value</code> loop ' +
-                    'and keeps the backbone atoms HA, CA, CB, C, N and H. Side-chain shifts are ignored, and ' +
-                    'glycine HA2/HA3 are averaged into a single HA.',
-                '3.1': 'Paste a complete NMR-STAR 3.1 entry. ORCO reads the <code>_Atom_chem_shift.Val</code> ' +
-                    'loop and keeps the backbone atoms HA, CA, CB, C, N and H. Side-chain shifts are ignored, ' +
-                    'and glycine HA2/HA3 are averaged into a single HA.'
-            };
-            var UBIQUITIN_EXAMPLE = document.getElementById('ubiquitinExample').textContent;
-            var STATS_TEXT = document.getElementById('statsData').textContent;
-            var classes = loadClasses(STATS_TEXT);
-
-            // Constant across all solve() calls.
-            var PRIOR_Z = 0.0;
-            for (var _pi = 0; _pi < classes.length; _pi++) PRIOR_Z += classes[_pi].priorWeight;
-
-            function loadClasses(text) {
-                var rows = text.split(/\r?\n/);
-                var header = rows[0].split(',');
-                var idx = {};
-                for (var i = 0; i < header.length; i++) idx[header[i]] = i;
-
-                var out = [];
-                var HALF_LOG_2PI = 0.5 * Math.log(2 * Math.PI);
-                for (var r = 1; r < rows.length; r++) {
-                    var line = rows[r];
-                    if (!line.trim()) continue;
-                    var p = line.split(',');
-                    var params = {};
-                    for (var c = 0; c < CHANNELS.length; c++) {
-                        var ch = CHANNELS[c];
-                        var mu = p[idx[ch + '_mu']];
-                        var sg = p[idx[ch + '_sigma']];
-                        if (mu !== '' && sg !== '') {
-                            var sigma = parseFloat(sg);
-                            // logNorm = log(sqrt(2*pi) * sigma); cached so logPdf is just (-0.5*z*z - logNorm)
-                            params[ch] = { mu: parseFloat(mu), sigma: sigma, logNorm: HALF_LOG_2PI + Math.log(sigma) };
-                        }
-                    }
-                    // Half-weight the two Cys oxidation states so that when ox+red are
-                    // lumped back into Cys at the end, Cys has the same total prior mass
-                    // as every other residue.
-                    var priorWeight = (p[idx['residue']] === 'Cys(ox)' || p[idx['residue']] === 'Cys(red)') ? 0.5 : 1.0;
-                    out.push({ residue: p[idx['residue']], state: p[idx['state']], params: params, priorWeight: priorWeight });
+            const distributions = Object.create(null);
+            for (const channel of CHANNELS) {
+                const meanToken = fields[columnIndex.get(`${channel}_mu`)].trim();
+                const sigmaToken = fields[columnIndex.get(`${channel}_sigma`)].trim();
+                if (!meanToken && !sigmaToken) {
+                    continue;
                 }
-                return out;
-            }
-
-            // Gaussian log-density. Uses params.logNorm = log(sqrt(2*pi) * sigma) cached
-            // at load time so this is one square + one subtract per channel evaluation.
-            function logPdfCached(x, params) {
-                var z = (x - params.mu) / params.sigma;
-                return -0.5 * z * z - params.logNorm;
-            }
-
-            // Solve one residue: returns residue -> probability, with Cys(ox)+Cys(red) lumped to Cys.
-            function solve(obs) {
-                var logW = new Array(classes.length);
-                var maxLog = -Infinity;
-
-                for (var i = 0; i < classes.length; i++) {
-                    var params = classes[i].params;
-                    var lw = Math.log(classes[i].priorWeight / PRIOR_Z);
-                    for (var c = 0; c < CHANNELS.length; c++) {
-                        var ch = CHANNELS[c];
-                        if (!(ch in obs)) continue;
-                        if (!params[ch]) { lw = -Infinity; break; }
-                        lw += logPdfCached(obs[ch], params[ch]);
-                    }
-                    logW[i] = lw;
-                    if (lw > maxLog) maxLog = lw;
+                if (!meanToken || !sigmaToken) {
+                    throw new Error(
+                        `Reference-statistics line ${lineNumber} has an incomplete ${channel} distribution.`
+                    );
                 }
-
-                // No class supports the complete observation.
-                if (!isFinite(maxLog)) return {};
-
-                var perRes = {};
-                for (var j = 0; j < classes.length; j++) {
-                    var w = (logW[j] === -Infinity) ? 0.0 : Math.exp(logW[j] - maxLog);
-                    var r = classes[j].residue;
-                    perRes[r] = (perRes[r] || 0.0) + w;
+                const mean = parseFiniteNumber(
+                    meanToken,
+                    `Reference-statistics line ${lineNumber} ${channel} mean`
+                );
+                const sigma = parseFiniteNumber(
+                    sigmaToken,
+                    `Reference-statistics line ${lineNumber} ${channel} sigma`
+                );
+                if (sigma <= 0) {
+                    throw new Error(
+                        `Reference-statistics line ${lineNumber} ${channel} sigma must be positive.`
+                    );
                 }
-
-                // Lump Cys(ox) + Cys(red) -> Cys.
-                if ('Cys(ox)' in perRes || 'Cys(red)' in perRes) {
-                    perRes.Cys = (perRes['Cys(ox)'] || 0) + (perRes['Cys(red)'] || 0);
-                    delete perRes['Cys(ox)'];
-                    delete perRes['Cys(red)'];
-                }
-
-                var Z = 0.0;
-                for (var k in perRes) if (perRes.hasOwnProperty(k)) Z += perRes[k];
-                if (!isFinite(Z) || Z <= 0) return {};
-                for (var k2 in perRes) if (perRes.hasOwnProperty(k2)) perRes[k2] /= Z;
-                return perRes;
+                distributions[channel] = {
+                    mean,
+                    sigma,
+                    logNormalization: HALF_LOG_TWO_PI + Math.log(sigma)
+                };
             }
 
-            function toOneLetter(residue) {
-                return AA_ONE_LETTER[residue] || residue;
-            }
+            const isCysteineState = residue === 'Cys(ox)' || residue === 'Cys(red)';
+            classes.push({
+                residue,
+                state,
+                priorWeight: isCysteineState ? 0.5 : 1,
+                distributions
+            });
+        }
 
-            function rank(posterior) {
-                var arr = [];
-                for (var k in posterior) {
-                    if (posterior.hasOwnProperty(k)) arr.push([toOneLetter(k), posterior[k]]);
+        for (const residue of REFERENCE_RESIDUES) {
+            for (const state of SECONDARY_STATES) {
+                if (!classKeys.has(`${residue}\t${state}`)) {
+                    throw new Error(
+                        `The embedded reference-statistics table lacks ${residue}, ${state}.`
+                    );
                 }
-                arr.sort(function (a, b) { return b[1] - a[1]; });
-                return arr;
             }
+        }
+        if (classes.length !== 63) {
+            throw new Error(
+                `The embedded reference-statistics table has ${classes.length} classes; 63 are required.`
+            );
+        }
+        return classes;
+    }
 
-            function posteriorEntropy(posterior) {
-                var h = 0.0;
-                for (var k in posterior) {
-                    if (!posterior.hasOwnProperty(k)) continue;
-                    var p = posterior[k];
-                    if (p > 0) h -= p * Math.log(p);
+    function accurateSum(values) {
+        let sum = 0;
+        let correction = 0;
+        for (const value of values) {
+            const next = sum + value;
+            if (Math.abs(sum) >= Math.abs(value)) {
+                correction += (sum - next) + value;
+            } else {
+                correction += (value - next) + sum;
+            }
+            sum = next;
+        }
+        return sum + correction;
+    }
+
+    function referenceResidueToAminoAcid(residue) {
+        if (residue === 'Cys(ox)' || residue === 'Cys(red)') {
+            return 'C';
+        }
+        return THREE_TO_ONE[residue];
+    }
+
+    function rankProbabilities(probabilities) {
+        return AMINO_ACIDS
+            .map((aminoAcid) => ({
+                aminoAcid,
+                probability: probabilities[aminoAcid]
+            }))
+            .sort((left, right) => {
+                const probabilityOrder = right.probability - left.probability;
+                if (probabilityOrder !== 0) {
+                    return probabilityOrder;
                 }
-                return h;
+                return AMINO_ACID_INDEX.get(left.aminoAcid) -
+                    AMINO_ACID_INDEX.get(right.aminoAcid);
+            });
+    }
+
+    function calculateEntropy(probabilities) {
+        let entropy = 0;
+        for (const aminoAcid of AMINO_ACIDS) {
+            const probability = probabilities[aminoAcid];
+            if (probability > 0) {
+                entropy -= probability * Math.log(probability);
+            }
+        }
+        return entropy;
+    }
+
+    function selectGoldilocksSet(ranking, entropy) {
+        const cutoff = 1 - Math.exp(-entropy);
+        const selected = [];
+        let cumulativeProbability = 0;
+
+        // The tolerance is identical to orco.py and protects the strict inequality at ties.
+        for (const candidate of ranking) {
+            if (cumulativeProbability > cutoff + GOLDILOCKS_EPSILON) {
+                break;
+            }
+            selected.push(candidate);
+            cumulativeProbability += candidate.probability;
+        }
+        return { cutoff, selected, cumulativeProbability };
+    }
+
+    function solveObservation(observations, classes) {
+        for (const channel of Object.keys(observations)) {
+            if (!CHANNELS.includes(channel)) {
+                throw new Error(`Unknown chemical-shift channel: ${channel}.`);
+            }
+            if (!Number.isFinite(observations[channel])) {
+                throw new Error(`Chemical shift ${channel} must be finite.`);
+            }
+        }
+
+        const logWeights = new Array(classes.length);
+        let largestLogWeight = -Infinity;
+        for (let classIndex = 0; classIndex < classes.length; classIndex += 1) {
+            const referenceClass = classes[classIndex];
+            let logWeight = Math.log(referenceClass.priorWeight);
+            for (const channel of CHANNELS) {
+                if (!hasOwn(observations, channel)) {
+                    continue;
+                }
+                const distribution = referenceClass.distributions[channel];
+                if (!distribution) {
+                    logWeight = -Infinity;
+                    break;
+                }
+                const zScore = (
+                    observations[channel] - distribution.mean
+                ) / distribution.sigma;
+                logWeight -= 0.5 * zScore * zScore;
+                logWeight -= distribution.logNormalization;
+            }
+            logWeights[classIndex] = logWeight;
+            if (logWeight > largestLogWeight) {
+                largestLogWeight = logWeight;
+            }
+        }
+        if (!Number.isFinite(largestLogWeight)) {
+            throw new Error('No reference class supports the supplied chemical shifts.');
+        }
+
+        const weights = Object.create(null);
+        for (const aminoAcid of AMINO_ACIDS) {
+            weights[aminoAcid] = 0;
+        }
+        for (let classIndex = 0; classIndex < classes.length; classIndex += 1) {
+            const logWeight = logWeights[classIndex];
+            if (!Number.isFinite(logWeight)) {
+                continue;
+            }
+            const aminoAcid = referenceResidueToAminoAcid(
+                classes[classIndex].residue
+            );
+            weights[aminoAcid] += Math.exp(logWeight - largestLogWeight);
+        }
+
+        const total = accurateSum(AMINO_ACIDS.map((aminoAcid) => weights[aminoAcid]));
+        if (!Number.isFinite(total) || total <= 0) {
+            throw new Error('No reference class supports the supplied chemical shifts.');
+        }
+
+        const probabilities = Object.create(null);
+        for (const aminoAcid of AMINO_ACIDS) {
+            probabilities[aminoAcid] = weights[aminoAcid] / total;
+        }
+        const ranking = rankProbabilities(probabilities);
+        const entropy = calculateEntropy(probabilities);
+        const goldilocks = selectGoldilocksSet(ranking, entropy);
+        return {
+            probabilities,
+            ranking,
+            entropy,
+            cutoff: goldilocks.cutoff,
+            goldilocks: goldilocks.selected,
+            goldilocksProbability: goldilocks.cumulativeProbability
+        };
+    }
+
+    function isMissingToken(token) {
+        return MISSING_TOKENS.has(String(token).trim().toUpperCase());
+    }
+
+    function parseShiftToken(token, description) {
+        if (isMissingToken(token)) {
+            return undefined;
+        }
+        const value = parseFiniteNumber(token, description);
+        return value === 0 ? undefined : value;
+    }
+
+    function assertInputSize(text) {
+        if (text.length > MAX_INPUT_CHARACTERS) {
+            throw new Error(
+                `Input is too large (${text.length.toLocaleString()} characters). ` +
+                `The limit is ${MAX_INPUT_CHARACTERS.toLocaleString()} characters.`
+            );
+        }
+    }
+
+    function parseShiftyHeader(tokens, lineNumber) {
+        const headers = tokens.map((token) => token.toUpperCase());
+        const allowedHeaders = new Set(['NUM', 'AA', ...CHANNELS]);
+        const seen = new Set();
+        for (const header of headers) {
+            if (!allowedHeaders.has(header)) {
+                throw new Error(
+                    `Line ${lineNumber}: unrecognized header column "${header}". ` +
+                    `Expected NUM, AA, or one of ${CHANNELS.join(', ')}.`
+                );
+            }
+            if (seen.has(header)) {
+                throw new Error(`Line ${lineNumber}: duplicate header column "${header}".`);
+            }
+            seen.add(header);
+        }
+        if (!seen.has('NUM')) {
+            throw new Error(`Line ${lineNumber}: the SHIFTY header has no NUM column.`);
+        }
+        if (!seen.has('AA')) {
+            throw new Error(`Line ${lineNumber}: the SHIFTY header has no AA column.`);
+        }
+        if (!CHANNELS.some((channel) => seen.has(channel))) {
+            throw new Error(
+                `Line ${lineNumber}: the SHIFTY header must contain at least one chemical-shift channel.`
+            );
+        }
+        return headers;
+    }
+
+    function parseShifty(text) {
+        assertInputSize(text);
+        const lines = splitLines(text);
+        let headers = null;
+        let headerLineNumber = null;
+        const residues = new Map();
+
+        for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+            const lineNumber = lineIndex + 1;
+            const trimmed = lines[lineIndex].trim();
+            if (!trimmed) {
+                continue;
             }
 
-
-            // Parse SHIFTY columnar input. The first non-empty line is the header.
-            // Channel names are case-insensitive; 0.00 denotes a missing observation.
-            function parseShifty(text) {
-                var lines = text.split(/\r?\n/);
-                var headerCols = null;
-                var residues = {};
-
-                for (var i = 0; i < lines.length; i++) {
-                    var lineNumber = i + 1;
-                    var line = lines[i].trim();
-                    if (!line) continue;
-
-                    if (headerCols === null) {
-                        var h = line.replace(/^#/, '').trim().split(/\s+/);
-                        if (h.length < 3) {
-                            throw new Error('Line ' + lineNumber + ': header is too short. Expected at least NUM AA CHANNEL.');
-                        }
-
-                        for (var hi = 0; hi < h.length; hi++) h[hi] = h[hi].toUpperCase();
-                        if (h[0] !== 'NUM') {
-                            throw new Error('Line ' + lineNumber + ': header column 1 must be NUM; got "' + h[0] + '".');
-                        }
-                        if (h[1] !== 'AA') {
-                            throw new Error('Line ' + lineNumber + ': header column 2 must be AA; got "' + h[1] + '".');
-                        }
-
-                        var seenChannels = {};
-                        for (var hc = 2; hc < h.length; hc++) {
-                            var headerChannel = h[hc];
-                            if (CHANNELS.indexOf(headerChannel) === -1) {
-                                throw new Error('Line ' + lineNumber + ': unrecognized channel "' + headerChannel +
-                                    '". Expected only: ' + CHANNELS.join(', ') + '.');
-                            }
-                            if (seenChannels[headerChannel]) {
-                                throw new Error('Line ' + lineNumber + ': duplicate channel "' + headerChannel + '" in header.');
-                            }
-                            seenChannels[headerChannel] = true;
-                        }
-                        headerCols = h;
+            if (!headers) {
+                if (trimmed.startsWith('#')) {
+                    const candidate = trimmed.slice(1).trim();
+                    const candidateTokens = candidate ? candidate.split(/\s+/) : [];
+                    const candidateHeaders = candidateTokens.map((token) => token.toUpperCase());
+                    if (
+                        !candidateHeaders.includes('NUM') ||
+                        !candidateHeaders.includes('AA')
+                    ) {
                         continue;
                     }
-
-                    if (line.charAt(0) === '#') continue;
-
-                    var p = line.split(/\s+/);
-                    if (p.length !== headerCols.length) {
-                        throw new Error('Line ' + lineNumber + ': expected ' + headerCols.length +
-                            ' columns from the header, but found ' + p.length + '.');
-                    }
-
-                    var seq = Number(p[0]);
-                    if (!isFinite(seq) || Math.floor(seq) !== seq) {
-                        throw new Error('Line ' + lineNumber + ': residue number must be an integer; got "' + p[0] + '".');
-                    }
-                    if (Object.prototype.hasOwnProperty.call(residues, seq)) {
-                        throw new Error('Line ' + lineNumber + ': duplicate residue number ' + seq + '.');
-                    }
-
-                    // AA is a SHIFTY-compatible label only; preserve it exactly.
-                    var aa = p[1];
-                    var obs = {};
-                    for (var c = 2; c < headerCols.length; c++) {
-                        var col = headerCols[c];
-                        var token = p[c];
-                        var v = Number(token);
-                        if (!isFinite(v)) {
-                            throw new Error('Line ' + lineNumber + ': invalid numeric value "' + token + '" in ' + col + '.');
-                        }
-                        if (v !== 0.0) obs[col] = v;  // 0.00 = missing
-                    }
-                    residues[seq] = { aa: aa, obs: obs };
+                    headers = parseShiftyHeader(candidateTokens, lineNumber);
+                    headerLineNumber = lineNumber;
+                    continue;
                 }
-
-                if (headerCols === null) {
-                    throw new Error('No header found. Expected a first line such as #NUM AA HA CA CB CO N HN.');
+                const tokens = trimmed.split(/\s+/);
+                const possibleHeaders = tokens.map((token) => token.toUpperCase());
+                if (!possibleHeaders.includes('NUM') || !possibleHeaders.includes('AA')) {
+                    throw new Error(
+                        `Line ${lineNumber}: expected a SHIFTY header containing NUM and AA.`
+                    );
                 }
-                return residues;
+                headers = parseShiftyHeader(tokens, lineNumber);
+                headerLineNumber = lineNumber;
+                continue;
             }
 
+            if (trimmed.startsWith('#')) {
+                continue;
+            }
+            const fields = trimmed.split(/\s+/);
+            if (fields.length !== headers.length) {
+                throw new Error(
+                    `Line ${lineNumber}: expected ${headers.length} columns from the header on ` +
+                    `line ${headerLineNumber}, but found ${fields.length}.`
+                );
+            }
 
-            // --- NMR-STAR input --------------------------------------------------
-            // NMR-STAR is a long table: one row per atom. ORCO needs a wide table:
-            // one row per residue with the channels as columns. parseStar reads the
-            // chemical shift loop, maps atom names to channels, and pivots on the
-            // residue number, returning the same structure as parseShifty.
+            const sequenceIndex = headers.indexOf('NUM');
+            const labelIndex = headers.indexOf('AA');
+            const sequence = parseSequenceNumber(
+                fields[sequenceIndex],
+                `Line ${lineNumber} NUM`
+            );
+            if (residues.has(sequence)) {
+                throw new Error(
+                    `Line ${lineNumber}: duplicate residue record for NUM ${sequence}.`
+                );
+            }
+            const label = fields[labelIndex];
+            if (!label) {
+                throw new Error(`Line ${lineNumber}: AA must contain a residue label.`);
+            }
 
-            // Backbone atom names as NMR-STAR writes them, mapped to ORCO channels.
-            // The carbonyl is C in NMR-STAR and CO here; the amide proton is H in
-            // 3.1 and HN here. Glycine has no HA: it reports HA2 and HA3, which are
-            // averaged into one HA because the reference statistics carry a single
-            // HA distribution per residue. Side-chain atoms are absent from this
-            // table and are therefore dropped.
-            var STAR_ATOM_TO_CHANNEL = {
-                HA: 'HA', HA2: 'HA', HA3: 'HA',
-                CA: 'CA',
-                CB: 'CB',
-                C: 'CO', CO: 'CO',
-                N: 'N',
-                H: 'HN', HN: 'HN'
-            };
-
-            // The two dialects differ only in tag names; the loop structure is shared.
-            var STAR_SCHEMAS = {
-                '2.1': {
-                    label: 'NMR-STAR 2.1',
-                    seq: '_Residue_seq_code',
-                    comp: '_Residue_label',
-                    atom: '_Atom_name',
-                    value: '_Chem_shift_value'
-                },
-                '3.1': {
-                    label: 'NMR-STAR 3.1',
-                    seq: '_Atom_chem_shift.Comp_index_ID',
-                    comp: '_Atom_chem_shift.Comp_ID',
-                    atom: '_Atom_chem_shift.Atom_ID',
-                    value: '_Atom_chem_shift.Val'
+            const observations = Object.create(null);
+            for (const channel of CHANNELS) {
+                const column = headers.indexOf(channel);
+                if (column === -1) {
+                    continue;
                 }
-            };
-
-            // Flatten NMR-STAR text into tokens: 'loop', 'stop', 'tag' or 'value'.
-            // Quoted strings and ;multiline; blocks collapse to one value token each,
-            // so they can never be mistaken for a tag or a row boundary.
-            function starTokenize(text) {
-                var lines = text.split(/\r?\n/);
-                var tokens = [];
-                var i = 0;
-
-                while (i < lines.length) {
-                    var raw = lines[i];
-
-                    if (raw.charAt(0) === ';') {
-                        var buf = [raw.slice(1)];
-                        i++;
-                        while (i < lines.length && lines[i].charAt(0) !== ';') {
-                            buf.push(lines[i]);
-                            i++;
-                        }
-                        i++;
-                        tokens.push({ type: 'value', text: buf.join('\n').trim() });
-                        continue;
-                    }
-
-                    var line = raw.trim();
-                    i++;
-                    if (!line || line.charAt(0) === '#') continue;
-
-                    var re = /'([^']*)'|"([^"]*)"|(\S+)/g;
-                    var m;
-                    while ((m = re.exec(line)) !== null) {
-                        if (m[3] === undefined) {
-                            tokens.push({ type: 'value', text: (m[1] !== undefined) ? m[1] : m[2] });
-                            continue;
-                        }
-                        var t = m[3];
-                        var lower = t.toLowerCase();
-                        if (lower === 'loop_') tokens.push({ type: 'loop', text: t });
-                        else if (lower === 'stop_') tokens.push({ type: 'stop', text: t });
-                        else if (t.charAt(0) === '_') tokens.push({ type: 'tag', text: t });
-                        else tokens.push({ type: 'value', text: t });
-                    }
+                const value = parseShiftToken(
+                    fields[column],
+                    `Line ${lineNumber} ${channel}`
+                );
+                if (value !== undefined) {
+                    observations[channel] = value;
                 }
-                return tokens;
             }
-
-            // Collect every loop_ ... stop_ block as {tags, rows}. Values are chunked
-            // in groups of tags.length rather than read one physical line at a time,
-            // so a row wrapped across several lines still parses correctly.
-            function starLoops(tokens) {
-                var loops = [];
-                for (var i = 0; i < tokens.length; i++) {
-                    if (tokens[i].type !== 'loop') continue;
-
-                    var tags = [];
-                    var j = i + 1;
-                    while (j < tokens.length && tokens[j].type === 'tag') {
-                        tags.push(tokens[j].text);
-                        j++;
-                    }
-
-                    var values = [];
-                    while (j < tokens.length && tokens[j].type !== 'stop' && tokens[j].type !== 'loop') {
-                        values.push(tokens[j].text);
-                        j++;
-                    }
-
-                    var rows = [];
-                    if (tags.length > 0) {
-                        for (var v = 0; v + tags.length <= values.length; v += tags.length) {
-                            rows.push(values.slice(v, v + tags.length));
-                        }
-                    }
-                    loops.push({ tags: tags, rows: rows });
-                    i = j;
-                }
-                return loops;
+            residues.set(sequence, { label, observations });
+            if (residues.size > MAX_RESIDUES) {
+                throw new Error(
+                    `Input contains more than ${MAX_RESIDUES.toLocaleString()} residue records.`
+                );
             }
+        }
 
-            function titleCase(text) {
-                return text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
-            }
+        if (!headers) {
+            throw new Error(
+                'No SHIFTY header was found. Expected a line such as #NUM AA HA CA CB CO N HN.'
+            );
+        }
+        if (residues.size === 0) {
+            throw new Error('No residue records were found beneath the SHIFTY header.');
+        }
+        return { residues, warnings: [] };
+    }
 
-            // NMR-STAR writes a missing value as '.' and an unknown value as '?'.
-            function isStarNull(token) {
-                return token === '.' || token === '?';
-            }
+    function classifyStarToken(text, lineNumber, quoted) {
+        if (quoted) {
+            return { type: 'value', text, lineNumber };
+        }
+        const lower = text.toLowerCase();
+        if (lower === 'loop_') {
+            return { type: 'loop', text, lineNumber };
+        }
+        if (lower === 'stop_') {
+            return { type: 'stop', text, lineNumber };
+        }
+        if (lower.startsWith('save_')) {
+            return { type: 'save', text, lineNumber };
+        }
+        if (lower.startsWith('data_')) {
+            return { type: 'data', text, lineNumber };
+        }
+        if (text.startsWith('_')) {
+            return { type: 'tag', text, lineNumber };
+        }
+        return { type: 'value', text, lineNumber };
+    }
 
-            function parseStar(text, version) {
-                var schema = STAR_SCHEMAS[version];
-                var loops = starLoops(starTokenize(text));
+    function tokenizeStar(text) {
+        assertInputSize(text);
+        const lines = splitLines(text);
+        const tokens = [];
 
-                // Pick the loop by the tags it carries, not by position: an entry may
-                // hold many loops and the shift loop is not always the first.
-                var loop = null;
-                for (var i = 0; i < loops.length; i++) {
-                    if (loops[i].tags.indexOf(schema.value) !== -1 && loops[i].tags.indexOf(schema.atom) !== -1) {
-                        loop = loops[i];
+        for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+            const rawLine = lines[lineIndex];
+            const lineNumber = lineIndex + 1;
+            if (rawLine.startsWith(';')) {
+                const valueLines = [rawLine.slice(1)];
+                const startLine = lineNumber;
+                let closed = false;
+                while (lineIndex + 1 < lines.length) {
+                    lineIndex += 1;
+                    if (lines[lineIndex].startsWith(';')) {
+                        closed = true;
                         break;
                     }
+                    valueLines.push(lines[lineIndex]);
                 }
-                if (!loop) {
-                    throw new Error('No ' + schema.label + ' chemical shift loop was found. Expected a loop_ ' +
-                        'containing ' + schema.atom + ' and ' + schema.value + '.');
+                if (!closed) {
+                    throw new Error(
+                        `Line ${startLine}: unterminated NMR-STAR semicolon text block.`
+                    );
                 }
-
-                var iSeq = loop.tags.indexOf(schema.seq);
-                var iComp = loop.tags.indexOf(schema.comp);
-                var iAtom = loop.tags.indexOf(schema.atom);
-                var iVal = loop.tags.indexOf(schema.value);
-                if (iSeq === -1) {
-                    throw new Error('The ' + schema.label + ' shift loop has no ' + schema.seq + ' column.');
-                }
-
-                // Accumulate per residue and channel. Running totals let Gly HA2/HA3
-                // average into one HA without a second pass.
-                var acc = {};
-                var kept = 0;
-                for (var r = 0; r < loop.rows.length; r++) {
-                    var row = loop.rows[r];
-
-                    var seqToken = row[iSeq];
-                    if (isStarNull(seqToken)) continue;
-                    var seq = Number(seqToken);
-                    if (!isFinite(seq) || Math.floor(seq) !== seq) continue;
-
-                    var valToken = row[iVal];
-                    if (isStarNull(valToken)) continue;
-                    var value = Number(valToken);
-                    if (!isFinite(value)) continue;
-
-                    var channel = STAR_ATOM_TO_CHANNEL[String(row[iAtom]).toUpperCase()];
-                    if (!channel) continue;
-
-                    if (!acc[seq]) {
-                        var comp = (iComp === -1 || isStarNull(row[iComp])) ? '?' : String(row[iComp]);
-                        acc[seq] = { aa: AA_ONE_LETTER[titleCase(comp)] || comp, sums: {} };
-                    }
-                    var sums = acc[seq].sums;
-                    if (!sums[channel]) sums[channel] = { total: 0, count: 0 };
-                    sums[channel].total += value;
-                    sums[channel].count += 1;
-                    kept++;
-                }
-
-                if (kept === 0) {
-                    throw new Error('The ' + schema.label + ' shift loop held no backbone shifts ORCO can use ' +
-                        '(HA, CA, CB, C, N, H).');
-                }
-
-                var residues = {};
-                for (var key in acc) {
-                    if (!Object.prototype.hasOwnProperty.call(acc, key)) continue;
-                    var obs = {};
-                    for (var c = 0; c < CHANNELS.length; c++) {
-                        var ch = CHANNELS[c];
-                        var sum = acc[key].sums[ch];
-                        if (!sum) continue;
-                        var mean = sum.total / sum.count;
-                        if (mean !== 0.0) obs[ch] = mean;   // 0.00 = missing, as in SHIFTY
-                    }
-                    residues[key] = { aa: acc[key].aa, obs: obs };
-                }
-                return residues;
+                tokens.push({
+                    type: 'value',
+                    text: valueLines.join('\n'),
+                    lineNumber: startLine
+                });
+                continue;
             }
 
-            // Single entry point: dispatch on the selected format.
-            function parseInput(text, format) {
-                if (format === 'shifty') return parseShifty(text);
-                return parseStar(text, format);
-            }
-
-            function pad(s, n) {
-                s = String(s);
-                while (s.length < n) s += ' ';
-                return s;
-            }
-
-            function fmtShift(v) {
-                return (v === undefined) ? '        ' : pad(v.toFixed(2), 8);
-            }
-
-            // Goldilocks set cardinality |G|: the smallest top-down prefix whose
-            // cumulative posterior mass strictly exceeds the self-sizing target
-            // c = 1 - 1/perplexity = 1 - exp(-H). G contains one candidate for a
-            // sharp posterior and several for a diffuse posterior, with no user-chosen
-            // confidence level. This is a descriptive heuristic, not a calibrated
-            // prediction set: it carries no formal coverage guarantee.
-            function goldilocksSetCardinality(ranked, entropy) {
-                if (ranked.length === 0) return 0;
-                var c = 1 - Math.exp(-entropy);
-                var cum = 0, cardinality = 0;
-                while (cardinality < ranked.length && cum <= c) {
-                    cum += ranked[cardinality][1];
-                    cardinality++;
+            let position = 0;
+            while (position < rawLine.length) {
+                while (position < rawLine.length && /\s/.test(rawLine[position])) {
+                    position += 1;
                 }
-                return cardinality;
-            }
-
-            // Classify every residue once. Each analysis stores the ranked posterior
-            // and the cardinality |G| of its Goldilocks candidate set G.
-            function analyzeResidues(residues) {
-                var analyses = [];
-                var seqs = Object.keys(residues).map(Number).sort(function (a, b) { return a - b; });
-
-                for (var s = 0; s < seqs.length; s++) {
-                    var seq = seqs[s];
-                    var entry = residues[seq];
-                    var obs = entry.obs;
-                    var analysis = {
-                        seq: seq,
-                        aa: entry.aa,
-                        obs: obs,
-                        supported: false,
-                        reason: '',
-                        rankedAll: [],
-                        gCardinality: 0
-                    };
-
-                    if (Object.keys(obs).length === 0) {
-                        analysis.reason = 'no observation';
-                        analyses.push(analysis);
-                        continue;
-                    }
-
-                    var posterior = solve(obs);
-                    var rankedAll = rank(posterior);
-                    if (rankedAll.length === 0) {
-                        analysis.reason = 'no compatible class';
-                        analyses.push(analysis);
-                        continue;
-                    }
-
-                    analysis.supported = true;
-                    analysis.rankedAll = rankedAll;
-                    analysis.gCardinality = goldilocksSetCardinality(rankedAll, posteriorEntropy(posterior));
-                    analyses.push(analysis);
-                }
-                return analyses;
-            }
-
-            function candidateSetString(analysis) {
-                if (!analysis.supported) return '(' + analysis.reason + ')';
-                var g = analysis.rankedAll.slice(0, analysis.gCardinality);
-                var labels = [];
-                for (var i = 0; i < g.length; i++) {
-                    labels.push(g[i][0] + '(' + g[i][1].toFixed(2) + ')');
-                }
-                return labels.join(' ');
-            }
-
-            // Compact on-page output: only the residue number, user-supplied label,
-            // and ranked candidate set G.
-            function makeVisibleOutput(analyses) {
-                var lines = [];
-                var aaWidth = 4;
-                for (var i = 0; i < analyses.length; i++) {
-                    aaWidth = Math.max(aaWidth, String(analyses[i].aa).length + 2);
-                }
-                lines.push(pad('NUM', 7) + pad('AA', aaWidth) + 'G');
-                for (var j = 0; j < analyses.length; j++) {
-                    var analysis = analyses[j];
-                    lines.push(pad(analysis.seq, 7) + pad(analysis.aa, aaWidth) + candidateSetString(analysis));
-                }
-                return lines.join('\n') + '\n';
-            }
-
-            // Full downloadable output retains the submitted chemical shifts while
-            // omitting fields that are not part of the user-facing result.
-            function makeDownloadOutput(analyses) {
-                var lines = [];
-                lines.push('# ORCO Version 1.2');
-                lines.push('# G is the ranked Goldilocks candidate set; values in parentheses are posterior probabilities.');
-                lines.push('');
-
-                var aaWidth = 4;
-                for (var i = 0; i < analyses.length; i++) {
-                    aaWidth = Math.max(aaWidth, String(analyses[i].aa).length + 2);
+                if (position >= rawLine.length || rawLine[position] === '#') {
+                    break;
                 }
 
-                lines.push(pad('NUM', 7) + pad('AA', aaWidth) +
-                    pad('HA', 8) + pad('CA', 8) + pad('CB', 8) + pad('CO', 8) + pad('N', 8) + pad('HN', 8) + 'G');
-
-                for (var j = 0; j < analyses.length; j++) {
-                    var analysis = analyses[j];
-                    var obs = analysis.obs;
-                    var shiftStr = fmtShift(obs.HA) + fmtShift(obs.CA) + fmtShift(obs.CB) +
-                        fmtShift(obs.CO) + fmtShift(obs.N) + fmtShift(obs.HN);
-                    lines.push(pad(analysis.seq, 7) + pad(analysis.aa, aaWidth) + shiftStr + candidateSetString(analysis));
-                }
-                return lines.join('\n') + '\n';
-            }
-
-
-            // Plot title. The input name is truncated because it is free text and
-            // would otherwise overrun the plot area.
-            function chartLabel() {
-                var name = inputName.value.trim();
-                if (!name) return 'ORCO';
-                if (name.length > 40) name = name.slice(0, 39) + '\u2026';
-                return 'ORCO (' + name + ')';
-            }
-
-            function plotFilename() {
-                var name = inputName.value.trim();
-                if (!name) return 'orco_plot.png';
-
-                name = name
-                    .replace(/[\/:*?"<>|\x00-\x1F]/g, '_')
-                    .replace(/[. ]+$/g, '');
-
-                if (!name) return 'orco_plot.png';
-                return name + '_orco_plot.png';
-            }
-
-            // Dark-to-light blue palette for ranks 1, 2, 3, ...
-            var PLOT_COLORS = ['#1864ab', '#228be6', '#4dabf7', '#74c0fc', '#a5d8ff', '#d0ebff'];
-
-            function plotLabelColor(rankIndex) {
-                return rankIndex < 2 ? '#ffffff' : '#000000';
-            }
-
-            function setCanvasForDisplay(canvas, cssWidth, cssHeight) {
-                // Render at high internal resolution while keeping the same page size.
-                // This makes the preview and downloaded PNG much sharper.
-                var deviceRatio = window.devicePixelRatio || 1;
-                var renderScale = Math.max(3, deviceRatio);
-                canvas.width = Math.round(cssWidth * renderScale);
-                canvas.height = Math.round(cssHeight * renderScale);
-                canvas.style.maxWidth = cssWidth + 'px';
-                canvas.style.aspectRatio = cssWidth + ' / ' + cssHeight;
-                var ctx = canvas.getContext('2d');
-                ctx.setTransform(renderScale, 0, 0, renderScale, 0, 0);
-                return ctx;
-            }
-
-            function updatePlotDownload() {
-                hideDownload(downloadPlot);
-                try {
-                    downloadPlot.href = resultCanvas.toDataURL('image/png');
-                    downloadPlot.download = plotFilename();
-                    downloadPlot.textContent = 'Download ' + plotFilename();
-                    downloadPlot.style.display = 'inline';
-                } catch (err) {
-                    // keep hidden if the browser blocks export for any reason
-                }
-            }
-
-            // Compact RCI-style plot rendered to canvas. The displayed image stays small
-            // and fixed-width, while the individual residue bars automatically become
-            // thinner as more residues are plotted.
-            function renderResultPlot(analyses) {
-                var cssWidth = 760;
-                var cssHeight = 340;
-                var ctx = setCanvasForDisplay(resultCanvas, cssWidth, cssHeight);
-                var width = cssWidth;
-                var height = cssHeight;
-                var left = 52;
-                var right = 16;
-                var top = 28;
-                var bottom = 42;
-                var plotWidth = width - left - right;
-                var plotHeight = height - top - bottom;
-                var xAxisY = top + plotHeight;
-                var yMin = 0.0;
-                var yMax = 1.0;
-                var colors = PLOT_COLORS;
-                var n = Math.max(1, analyses.length);
-                var slot = plotWidth / n;
-                var gap = Math.min(3, Math.max(0.5, slot * 0.18));
-                var barWidth = Math.max(1, slot - gap);
-                // Depends only on barWidth, so it is constant across all residues.
-                var numFontSize = Math.max(5, Math.min(8, Math.floor(barWidth - 1)));
-
-                ctx.clearRect(0, 0, width, height);
-                ctx.fillStyle = '#ffffff';
-                ctx.fillRect(0, 0, width, height);
-
-                // Single title carrying the input name. The former RCI-style line legend
-                // was removed: nothing here is a line series, and it sat inside the plot
-                // frame where tall bars painted over it.
-                ctx.fillStyle = '#000000';
-                ctx.font = '13px Arial, Helvetica, sans-serif';
-                ctx.textAlign = 'center';
-                ctx.fillText(chartLabel(), left + plotWidth / 2, 18);
-
-                // Axes and frame
-                ctx.strokeStyle = '#000000';
-                ctx.lineWidth = 1;
-                ctx.strokeRect(left, top, plotWidth, plotHeight);
-
-                function yToPx(v) {
-                    return top + (yMax - v) / (yMax - yMin) * plotHeight;
-                }
-
-                // Y ticks and light gridlines in a simple matplotlib-like style.
-                ctx.fillStyle = '#000000';
-                ctx.font = '11px Arial, Helvetica, sans-serif';
-                ctx.textAlign = 'right';
-                for (var t = 0; t <= 5; t++) {
-                    var v = t * 0.2;
-                    var y = yToPx(v);
-                    ctx.strokeStyle = '#e0e0e0';
-                    ctx.lineWidth = 1;
-                    ctx.beginPath();
-                    ctx.moveTo(left, y);
-                    ctx.lineTo(left + plotWidth, y);
-                    ctx.stroke();
-                    ctx.strokeStyle = '#000000';
-                    ctx.beginPath();
-                    ctx.moveTo(left - 4, y);
-                    ctx.lineTo(left, y);
-                    ctx.stroke();
-                    ctx.fillText(v.toFixed(1).replace(/\.0$/, ''), left - 7, y + 4);
-                }
-                ctx.strokeStyle = '#000000';
-                ctx.lineWidth = 1;
-
-                // Keep the x-axis itself simple; every residue number is drawn inside its
-                // own column instead of as sparse axis tick labels.
-                ctx.textAlign = 'center';
-                ctx.fillText('#NUM', left + plotWidth / 2, height - 8);
-
-                ctx.save();
-                ctx.translate(14, top + plotHeight / 2);
-                ctx.rotate(-Math.PI / 2);
-                ctx.fillText('Posterior probability', 0, 0);
-                ctx.restore();
-
-                // Bars: lowest-ranked candidate sits on the x-axis, while rank 1 is at the top.
-                // The upper edge of the whole stack is therefore the cumulative top-p cutoff.
-                for (var j = 0; j < analyses.length; j++) {
-                    var analysis = analyses[j];
-                    var x0 = left + j * slot + (slot - barWidth) / 2;
-                    var xCenter = x0 + barWidth / 2;
-
-                    if (analysis.supported && analysis.gCardinality > 0) {
-                        var g = analysis.rankedAll.slice(0, analysis.gCardinality);
-                        var yCursor = xAxisY;
-                        var bottomSeg = null;
-                        for (var gi = g.length - 1; gi >= 0; gi--) {
-                            var prob = g[gi][1];
-                            var h = prob * plotHeight;
-                            // Advance before the skip so the top of the stack stays exactly the
-                            // cumulative posterior mass of G even when a segment is too thin to draw.
-                            yCursor -= h;
-                            if (h <= 0.3) continue;
-                            // Clamp rather than wrap: the palette runs dark to light, so a modulo
-                            // would give rank 7 the same colour as rank 1 and destroy the ordering.
-                            var rankIndex = Math.min(gi, colors.length - 1);
-                            ctx.fillStyle = colors[rankIndex];
-                            ctx.fillRect(x0, yCursor, barWidth, h);
-                            // A 1px outline swallows the fill once bars get thin, turning the
-                            // whole plot black. Only outline bars wide enough to survive it.
-                            if (barWidth >= 3) {
-                                ctx.strokeStyle = '#000000';
-                                ctx.lineWidth = 1;
-                                ctx.strokeRect(x0, yCursor, barWidth, h);
-                            }
-
-                            var isBottom = !bottomSeg;
-                            if (isBottom) {
-                                bottomSeg = { y: yCursor, h: h, rankIndex: rankIndex };
-                            }
-
-                            // Always use horizontal one-letter labels, with the smallest practical font.
-                            var fontSize = 6;
-                            if (barWidth >= 14 && h >= 18) fontSize = 12;
-                            else if (barWidth >= 10 && h >= 14) fontSize = 10;
-                            else if (barWidth >= 8 && h >= 10) fontSize = 8;
-
-                            // The residue number is drawn at the foot of the bottom segment.
-                            // Give up the letter there if the segment cannot hold both.
-                            var letterY = yCursor + h / 2 + Math.max(2, fontSize * 0.35);
-                            if (isBottom) {
-                                if (h < fontSize + numFontSize + 4) continue;
-                                letterY = yCursor + (h - numFontSize - 2) / 2 + Math.max(2, fontSize * 0.35);
-                            }
-
-                            ctx.save();
-                            ctx.fillStyle = plotLabelColor(rankIndex);
-                            ctx.textAlign = 'center';
-                            ctx.font = 'bold ' + fontSize + 'px Arial, Helvetica, sans-serif';
-                            ctx.fillText(g[gi][0], xCenter, letterY);
-                            ctx.restore();
+                const quote = rawLine[position] === '"' || rawLine[position] === "'"
+                    ? rawLine[position]
+                    : null;
+                if (quote) {
+                    const start = position;
+                    position += 1;
+                    let value = '';
+                    let closed = false;
+                    while (position < rawLine.length) {
+                        const character = rawLine[position];
+                        if (
+                            character === quote &&
+                            (
+                                position + 1 === rawLine.length ||
+                                /\s/.test(rawLine[position + 1]) ||
+                                rawLine[position + 1] === '#'
+                            )
+                        ) {
+                            position += 1;
+                            closed = true;
+                            break;
                         }
+                        value += character;
+                        position += 1;
+                    }
+                    if (!closed) {
+                        throw new Error(
+                            `Line ${lineNumber}: unterminated NMR-STAR quoted value beginning ` +
+                            `at column ${start + 1}.`
+                        );
+                    }
+                    tokens.push(classifyStarToken(value, lineNumber, true));
+                    continue;
+                }
 
-                        // Draw every residue number inside its own column, anchored within the
-                        // bottom segment so it stays inside the box rather than below the axis.
-                        if (bottomSeg) {
-                            ctx.save();
-                            ctx.fillStyle = plotLabelColor(bottomSeg.rankIndex);
-                            ctx.textAlign = 'center';
-                            ctx.font = 'bold ' + numFontSize + 'px Arial, Helvetica, sans-serif';
-                            var numY = Math.min(xAxisY - 2, bottomSeg.y + bottomSeg.h - 2);
-                            ctx.fillText(String(analysis.seq), xCenter, numY);
-                            ctx.restore();
-                        }
-                    } else {
-                        // Unsupported residue. Mark the column explicitly so a missing result
-                        // is distinguishable from a result too small to see.
-                        ctx.fillStyle = '#f0f0f0';
-                        ctx.fillRect(x0, top, barWidth, plotHeight);
-                        if (barWidth >= 3) {
-                            ctx.strokeStyle = '#c0c0c0';
-                            ctx.lineWidth = 1;
-                            ctx.strokeRect(x0, top, barWidth, plotHeight);
-                        }
+                const start = position;
+                while (position < rawLine.length && !/\s/.test(rawLine[position])) {
+                    position += 1;
+                }
+                const value = rawLine.slice(start, position);
+                tokens.push(classifyStarToken(value, lineNumber, false));
+            }
+        }
+        return tokens;
+    }
+
+    function collectStarLoops(tokens) {
+        const loops = [];
+        for (let tokenIndex = 0; tokenIndex < tokens.length; tokenIndex += 1) {
+            const startToken = tokens[tokenIndex];
+            if (startToken.type !== 'loop') {
+                continue;
+            }
+
+            const tags = [];
+            let cursor = tokenIndex + 1;
+            while (cursor < tokens.length && tokens[cursor].type === 'tag') {
+                tags.push(tokens[cursor]);
+                cursor += 1;
+            }
+            if (tags.length === 0) {
+                throw new Error(
+                    `Line ${startToken.lineNumber}: NMR-STAR loop_ has no tag columns.`
+                );
+            }
+
+            const values = [];
+            while (cursor < tokens.length && tokens[cursor].type !== 'stop') {
+                if (tokens[cursor].type !== 'value') {
+                    throw new Error(
+                        `Line ${tokens[cursor].lineNumber}: NMR-STAR loop beginning on line ` +
+                        `${startToken.lineNumber} is missing stop_.`
+                    );
+                }
+                values.push(tokens[cursor]);
+                cursor += 1;
+            }
+            if (cursor >= tokens.length) {
+                throw new Error(
+                    `Line ${startToken.lineNumber}: NMR-STAR loop is missing stop_.`
+                );
+            }
+            if (values.length % tags.length !== 0) {
+                throw new Error(
+                    `NMR-STAR loop beginning on line ${startToken.lineNumber} has ` +
+                    `${values.length} values for ${tags.length} columns.`
+                );
+            }
+
+            const rows = [];
+            for (let valueIndex = 0; valueIndex < values.length; valueIndex += tags.length) {
+                const rowTokens = values.slice(valueIndex, valueIndex + tags.length);
+                rows.push({
+                    values: rowTokens.map((token) => token.text),
+                    lineNumber: rowTokens[0].lineNumber
+                });
+            }
+            loops.push({
+                startLine: startToken.lineNumber,
+                tags: tags.map((token) => token.text),
+                rows
+            });
+            tokenIndex = cursor;
+        }
+        return loops;
+    }
+
+    function starTagIndex(tags, tag) {
+        const target = tag.toLowerCase();
+        return tags.findIndex((candidate) => candidate.toLowerCase() === target);
+    }
+
+    function firstStarTagIndex(tags, candidates) {
+        for (const candidate of candidates) {
+            const index = starTagIndex(tags, candidate);
+            if (index !== -1) {
+                return index;
+            }
+        }
+        return -1;
+    }
+
+    function isStarNull(token) {
+        return token === '.' || token === '?';
+    }
+
+    function normalizeResidueLabel(token) {
+        if (token === undefined || isStarNull(token)) {
+            return { label: '?', recognized: false };
+        }
+        const text = String(token);
+        const upper = text.toUpperCase();
+        if (AMINO_ACIDS.includes(upper)) {
+            return { label: upper, recognized: true };
+        }
+        if (THREE_TO_ONE_UPPER.has(upper)) {
+            return { label: THREE_TO_ONE_UPPER.get(upper), recognized: true };
+        }
+        return { label: text, recognized: false };
+    }
+
+    function makeStarRecord(sequence, residueToken, lineNumber) {
+        const normalized = normalizeResidueLabel(residueToken);
+        return {
+            sequence,
+            label: normalized.label,
+            normalizedResidueToken: residueToken,
+            labelRecognized: normalized.recognized,
+            atoms: new Map(),
+            firstLine: lineNumber
+        };
+    }
+
+    function addStarAtom(record, atom, value, lineNumber, residueToken) {
+        const normalized = normalizeResidueLabel(residueToken);
+        if (
+            record.normalizedResidueToken !== undefined &&
+            residueToken !== undefined &&
+            !isStarNull(record.normalizedResidueToken) &&
+            !isStarNull(residueToken) &&
+            String(record.normalizedResidueToken).toUpperCase() !==
+                String(residueToken).toUpperCase()
+        ) {
+            throw new Error(
+                `Line ${lineNumber}: residue ${record.sequence} has conflicting labels ` +
+                `"${record.normalizedResidueToken}" and "${residueToken}".`
+            );
+        }
+        if (record.label === '?' && normalized.label !== '?') {
+            record.label = normalized.label;
+            record.normalizedResidueToken = residueToken;
+            record.labelRecognized = normalized.recognized;
+        }
+        if (record.atoms.has(atom)) {
+            const previous = record.atoms.get(atom);
+            throw new Error(
+                `Line ${lineNumber}: duplicate ${atom} observation for residue ` +
+                `${record.sequence}; first seen on line ${previous.lineNumber}.`
+            );
+        }
+        record.atoms.set(atom, { value, lineNumber });
+    }
+
+    function starRecordToObservations(record) {
+        const observations = Object.create(null);
+        const channelSources = new Map();
+        const numberedHa = [];
+
+        for (const [atom, observation] of record.atoms) {
+            const channel = STAR_ATOM_TO_CHANNEL[atom];
+            if (atom === 'HA2' || atom === 'HA3') {
+                if (record.label !== 'G') {
+                    throw new Error(
+                        `Line ${observation.lineNumber}: ${atom} is supported only for a glycine ` +
+                        `residue label; residue ${record.sequence} is labeled "${record.label}".`
+                    );
+                }
+                numberedHa.push(observation);
+                continue;
+            }
+            if (channelSources.has(channel)) {
+                const previous = channelSources.get(channel);
+                throw new Error(
+                    `Line ${observation.lineNumber}: ${atom} duplicates the ${channel} channel for ` +
+                    `residue ${record.sequence}; first supplied as ${previous.atom} on line ` +
+                    `${previous.lineNumber}.`
+                );
+            }
+            observations[channel] = observation.value;
+            channelSources.set(channel, { atom, lineNumber: observation.lineNumber });
+        }
+
+        if (numberedHa.length > 0) {
+            if (channelSources.has('HA')) {
+                const previous = channelSources.get('HA');
+                throw new Error(
+                    `Line ${numberedHa[0].lineNumber}: numbered glycine HA observations duplicate ` +
+                    `the ${previous.atom} observation on line ${previous.lineNumber} for residue ` +
+                    `${record.sequence}.`
+                );
+            }
+            // RefDB supplies one glycine HA distribution, so HA2 and HA3 are averaged.
+            observations.HA = accurateSum(
+                numberedHa.map((observation) => observation.value)
+            ) / numberedHa.length;
+        }
+        return observations;
+    }
+
+    function parseStar(text, version) {
+        const schema = STAR_SCHEMAS[version];
+        if (!schema) {
+            throw new Error(`Unsupported NMR-STAR version "${version}".`);
+        }
+        const loops = collectStarLoops(tokenizeStar(text));
+        const matchingLoops = loops.filter((loop) => (
+            starTagIndex(loop.tags, schema.atom) !== -1 &&
+            starTagIndex(loop.tags, schema.value) !== -1
+        ));
+        if (matchingLoops.length === 0) {
+            throw new Error(
+                `No ${schema.label} chemical-shift loop was found. Expected one loop containing ` +
+                `${schema.atom} and ${schema.value}.`
+            );
+        }
+        if (matchingLoops.length > 1) {
+            throw new Error(
+                `The entry contains ${matchingLoops.length} ${schema.label} chemical-shift loops. ` +
+                'ORCO accepts one chemical-shift list at a time.'
+            );
+        }
+
+        const loop = matchingLoops[0];
+        const sequenceColumn = starTagIndex(loop.tags, schema.sequence);
+        const residueColumn = starTagIndex(loop.tags, schema.residue);
+        const atomColumn = starTagIndex(loop.tags, schema.atom);
+        const valueColumn = starTagIndex(loop.tags, schema.value);
+        const scopeColumn = firstStarTagIndex(loop.tags, schema.scopes);
+        if (sequenceColumn === -1) {
+            throw new Error(
+                `The ${schema.label} chemical-shift loop has no ${schema.sequence} column.`
+            );
+        }
+
+        const records = new Map();
+        const unrecognizedLabels = new Set();
+        const ignoredAtoms = new Set();
+        let activeScope = null;
+
+        for (let rowIndex = 0; rowIndex < loop.rows.length; rowIndex += 1) {
+            const row = loop.rows[rowIndex];
+            const atomToken = row.values[atomColumn];
+            if (isStarNull(atomToken)) {
+                throw new Error(
+                    `Line ${row.lineNumber}: ${schema.atom} is missing in chemical-shift row ` +
+                    `${rowIndex + 1}.`
+                );
+            }
+            const atom = String(atomToken).toUpperCase();
+            if (!hasOwn(STAR_ATOM_TO_CHANNEL, atom)) {
+                ignoredAtoms.add(atom);
+                continue;
+            }
+
+            if (scopeColumn !== -1) {
+                const scopeToken = row.values[scopeColumn];
+                if (!isStarNull(scopeToken)) {
+                    if (activeScope === null) {
+                        activeScope = scopeToken;
+                    } else if (scopeToken !== activeScope) {
+                        throw new Error(
+                            `Line ${row.lineNumber}: the chemical-shift loop contains multiple ` +
+                            'molecular entities. Supply one entity at a time.'
+                        );
                     }
                 }
-
-                updatePlotDownload();
             }
 
-            // Build the optional result filename. Spaces and letter case are preserved.
-            // Characters forbidden in common desktop filesystems are replaced so the
-            // same single-file page behaves consistently on Windows, macOS, and Linux.
-            function resultFilename() {
-                var name = inputName.value.trim();
-                if (!name) return 'orco_results.txt';
-
-                name = name
-                    .replace(/[\\/:*?"<>|\x00-\x1F]/g, '_')
-                    .replace(/[. ]+$/g, '');
-
-                if (!name) return 'orco_results.txt';
-                return name + '_orco_results.txt';
+            const sequenceToken = row.values[sequenceColumn];
+            if (isStarNull(sequenceToken)) {
+                throw new Error(
+                    `Line ${row.lineNumber}: ${schema.sequence} is missing for backbone atom ${atom}.`
+                );
+            }
+            const sequence = parseSequenceNumber(
+                sequenceToken,
+                `Line ${row.lineNumber} ${schema.sequence}`
+            );
+            const residueToken = residueColumn === -1
+                ? undefined
+                : row.values[residueColumn];
+            if (!records.has(sequence)) {
+                records.set(
+                    sequence,
+                    makeStarRecord(sequence, residueToken, row.lineNumber)
+                );
+            }
+            const record = records.get(sequence);
+            const normalizedLabel = normalizeResidueLabel(residueToken);
+            if (!normalizedLabel.recognized && normalizedLabel.label !== '?') {
+                unrecognizedLabels.add(normalizedLabel.label);
             }
 
-            // Wire a download anchor to a text blob, revoking any older URL first.
-            function revokeDownload(anchor) {
-                if (anchor._orcoObjectUrl) {
-                    URL.revokeObjectURL(anchor._orcoObjectUrl);
-                    anchor._orcoObjectUrl = null;
+            const valueToken = row.values[valueColumn];
+            if (isStarNull(valueToken)) {
+                continue;
+            }
+            const value = parseFiniteNumber(
+                valueToken,
+                `Line ${row.lineNumber} ${schema.value}`
+            );
+            if (value === 0) {
+                continue;
+            }
+            addStarAtom(record, atom, value, row.lineNumber, residueToken);
+        }
+
+        if (records.size === 0) {
+            const ignored = [...ignoredAtoms].slice(0, 8).join(', ');
+            const detail = ignored ? ` Found only other atom labels such as ${ignored}.` : '';
+            throw new Error(
+                `The ${schema.label} chemical-shift loop contains no usable HA, CA, CB, C/CO, ` +
+                `N, or H/HN observations.${detail}`
+            );
+        }
+        if (records.size > MAX_RESIDUES) {
+            throw new Error(
+                `Input contains more than ${MAX_RESIDUES.toLocaleString()} residue records.`
+            );
+        }
+
+        const residues = new Map();
+        for (const [sequence, record] of records) {
+            residues.set(sequence, {
+                label: record.label,
+                observations: starRecordToObservations(record)
+            });
+        }
+        const warnings = [];
+        if (unrecognizedLabels.size > 0) {
+            const labels = [...unrecognizedLabels].slice(0, 8).join(', ');
+            warnings.push(
+                `Unrecognized residue labels were retained for display and were not used in ` +
+                `classification: ${labels}${unrecognizedLabels.size > 8 ? ', …' : ''}.`
+            );
+        }
+        return { residues, warnings };
+    }
+
+    function parseInput(text, format) {
+        assertInputSize(text);
+        if (!text.trim()) {
+            throw new Error('Enter chemical-shift data or choose a file.');
+        }
+        if (format === 'shifty') {
+            return parseShifty(text);
+        }
+        return parseStar(text, format);
+    }
+
+    function analyzeResidues(residues, classes) {
+        const sequences = [...residues.keys()].sort((left, right) => left - right);
+        return sequences.map((sequence) => {
+            const residue = residues.get(sequence);
+            const result = solveObservation(residue.observations, classes);
+            return {
+                sequence,
+                label: residue.label,
+                observations: residue.observations,
+                noObservations: Object.keys(residue.observations).length === 0,
+                ...result
+            };
+        });
+    }
+
+    function formatProbability(probability) {
+        return probability.toFixed(4);
+    }
+
+    function formatCandidate(candidate) {
+        return `${candidate.aminoAcid} (${formatProbability(candidate.probability)})`;
+    }
+
+    function formatCandidates(candidates) {
+        return candidates.map(formatCandidate).join(', ');
+    }
+
+    function outputCell(value) {
+        return String(value).replace(/[\t\r\n]+/g, ' ');
+    }
+
+    function roundTripNumber(value) {
+        return value.toPrecision(17);
+    }
+
+    function makeDownloadText(analyses) {
+        const lines = [
+            '# ORCO full posterior probabilities',
+            '# Posterior columns contain all 20 canonical amino-acid residue types.',
+            '# Shannon entropy uses natural logarithms.',
+            '# The Goldilocks set is the smallest ranked prefix whose cumulative posterior',
+            '# probability exceeds 1 - exp(-H), using the same 1e-12 comparison tolerance as orco.py.',
+            ''
+        ];
+        const headers = [
+            'NUM', 'AA', ...CHANNELS, 'STATUS', 'ENTROPY', 'CUTOFF',
+            'TOP_1', 'TOP_3', 'RANKING', 'GOLDILOCKS',
+            ...AMINO_ACIDS.map((aminoAcid) => `P_${aminoAcid}`)
+        ];
+        lines.push(headers.join('\t'));
+
+        for (const analysis of analyses) {
+            const shifts = CHANNELS.map((channel) => (
+                hasOwn(analysis.observations, channel)
+                    ? roundTripNumber(analysis.observations[channel])
+                    : '.'
+            ));
+            const topThree = analysis.ranking.slice(0, 3);
+            const row = [
+                analysis.sequence,
+                outputCell(analysis.label),
+                ...shifts,
+                analysis.noObservations ? 'uniform_prior_no_shifts' : 'observed',
+                roundTripNumber(analysis.entropy),
+                roundTripNumber(analysis.cutoff),
+                analysis.ranking[0].aminoAcid,
+                topThree.map((candidate) => candidate.aminoAcid).join(','),
+                analysis.ranking.map((candidate) => candidate.aminoAcid).join(','),
+                analysis.goldilocks.map((candidate) => candidate.aminoAcid).join(','),
+                ...AMINO_ACIDS.map((aminoAcid) => (
+                    roundTripNumber(analysis.probabilities[aminoAcid])
+                ))
+            ];
+            lines.push(row.join('\t'));
+        }
+        return `${lines.join('\n')}\n`;
+    }
+
+    function safeOutputBaseName(name) {
+        const cleaned = name
+            .trim()
+            .replace(/[\\/:*?"<>|\u0000-\u001F]/g, '_')
+            .replace(/[. ]+$/g, '')
+            .slice(0, 100);
+        return cleaned || 'orco';
+    }
+
+    function renderResultsTable(analyses, rowsElement) {
+        rowsElement.textContent = '';
+        const fragment = document.createDocumentFragment();
+        for (const analysis of analyses) {
+            const row = document.createElement('tr');
+            const cells = [
+                String(analysis.sequence),
+                String(analysis.label),
+                formatCandidates(analysis.goldilocks)
+            ];
+            cells.forEach((text, index) => {
+                const cell = document.createElement('td');
+                cell.textContent = text;
+                if (index === 2) {
+                    cell.className = 'candidates';
+                }
+                row.appendChild(cell);
+            });
+            fragment.appendChild(row);
+        }
+        rowsElement.appendChild(fragment);
+    }
+
+    function interpolateColor(start, end, fraction) {
+        const channels = start.map((value, index) => (
+            Math.round(value + (end[index] - value) * fraction)
+        ));
+        return `rgb(${channels.join(',')})`;
+    }
+
+    function candidateColor(rankIndex) {
+        const fraction = rankIndex / (AMINO_ACIDS.length - 1);
+        return interpolateColor([24, 100, 171], [208, 235, 255], fraction);
+    }
+
+    function candidateTextColor(rankIndex) {
+        return rankIndex < 5 ? '#ffffff' : '#000000';
+    }
+
+    function prepareCanvas(canvas, cssWidth, cssHeight) {
+        const scale = Math.max(2, Math.min(3, window.devicePixelRatio || 1));
+        canvas.width = Math.round(cssWidth * scale);
+        canvas.height = Math.round(cssHeight * scale);
+        const context = canvas.getContext('2d');
+        if (!context) {
+            throw new Error('Canvas rendering is unavailable in this browser.');
+        }
+        context.setTransform(scale, 0, 0, scale, 0, 0);
+        return context;
+    }
+
+    function renderPlot(analyses, canvas, title) {
+        const width = 760;
+        const height = 340;
+        const context = prepareCanvas(canvas, width, height);
+        const left = 52;
+        const right = 16;
+        const top = 30;
+        const bottom = 42;
+        const plotWidth = width - left - right;
+        const plotHeight = height - top - bottom;
+        const axisY = top + plotHeight;
+        const slotWidth = plotWidth / analyses.length;
+        const gap = Math.min(3, Math.max(0.25, slotWidth * 0.18));
+        const barWidth = Math.max(0.5, slotWidth - gap);
+
+        context.clearRect(0, 0, width, height);
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, width, height);
+        context.fillStyle = '#000000';
+        context.font = '13px Arial, Helvetica, sans-serif';
+        context.textAlign = 'center';
+        context.fillText(title, left + plotWidth / 2, 18);
+
+        context.font = '11px Arial, Helvetica, sans-serif';
+        context.textAlign = 'right';
+        for (let tick = 0; tick <= 5; tick += 1) {
+            const value = tick * 0.2;
+            const y = top + (1 - value) * plotHeight;
+            context.strokeStyle = '#dedede';
+            context.lineWidth = 1;
+            context.beginPath();
+            context.moveTo(left, y);
+            context.lineTo(left + plotWidth, y);
+            context.stroke();
+            context.fillStyle = '#000000';
+            context.fillText(value.toFixed(1).replace(/\.0$/, ''), left - 7, y + 4);
+        }
+
+        context.strokeStyle = '#000000';
+        context.strokeRect(left, top, plotWidth, plotHeight);
+        context.textAlign = 'center';
+        context.fillText('NUM', left + plotWidth / 2, height - 8);
+        context.save();
+        context.translate(14, top + plotHeight / 2);
+        context.rotate(-Math.PI / 2);
+        context.fillText('Posterior probability', 0, 0);
+        context.restore();
+
+        analyses.forEach((analysis, analysisIndex) => {
+            const x = left + analysisIndex * slotWidth + (slotWidth - barWidth) / 2;
+            let yCursor = axisY;
+            for (
+                let candidateIndex = analysis.goldilocks.length - 1;
+                candidateIndex >= 0;
+                candidateIndex -= 1
+            ) {
+                const candidate = analysis.goldilocks[candidateIndex];
+                const segmentHeight = candidate.probability * plotHeight;
+                yCursor -= segmentHeight;
+                if (segmentHeight <= 0) {
+                    continue;
+                }
+                context.fillStyle = candidateColor(candidateIndex);
+                context.fillRect(x, yCursor, barWidth, segmentHeight);
+                if (barWidth >= 3) {
+                    context.strokeStyle = '#000000';
+                    context.strokeRect(x, yCursor, barWidth, segmentHeight);
+                }
+                if (barWidth >= 5 && segmentHeight >= 7) {
+                    const fontSize = Math.min(11, Math.max(5, Math.floor(barWidth - 1)));
+                    context.fillStyle = candidateTextColor(candidateIndex);
+                    context.font = `bold ${fontSize}px Arial, Helvetica, sans-serif`;
+                    context.textAlign = 'center';
+                    context.fillText(
+                        candidate.aminoAcid,
+                        x + barWidth / 2,
+                        yCursor + segmentHeight / 2 + fontSize * 0.35
+                    );
                 }
             }
 
-            function setDownload(anchor, text, filename) {
-                revokeDownload(anchor);
-                var url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
-                anchor._orcoObjectUrl = url;
+            const labelStep = Math.max(1, Math.ceil(analyses.length / 25));
+            if (
+                analysisIndex % labelStep === 0 ||
+                analysisIndex === analyses.length - 1
+            ) {
+                const xCenter = x + barWidth / 2;
+                context.strokeStyle = '#000000';
+                context.beginPath();
+                context.moveTo(xCenter, axisY);
+                context.lineTo(xCenter, axisY + 4);
+                context.stroke();
+                context.fillStyle = '#000000';
+                context.font = '9px Arial, Helvetica, sans-serif';
+                context.textAlign = 'center';
+                context.fillText(String(analysis.sequence), xCenter, axisY + 14);
+            }
+        });
+        canvas.setAttribute(
+            'aria-label',
+            `ORCO Goldilocks posterior plot for ${analyses.length} residue ` +
+            `${analyses.length === 1 ? 'record' : 'records'}.`
+        );
+    }
+
+    function decodeUtf8(arrayBuffer) {
+        const bytes = new Uint8Array(arrayBuffer);
+        if (
+            bytes.length >= 2 &&
+            (
+                (bytes[0] === 0xFF && bytes[1] === 0xFE) ||
+                (bytes[0] === 0xFE && bytes[1] === 0xFF)
+            )
+        ) {
+            throw new Error('The selected file is UTF-16. Save it as UTF-8 text and try again.');
+        }
+        let text;
+        try {
+            text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+        } catch (error) {
+            throw new Error('The selected file is not valid UTF-8 text.');
+        }
+        if (text.includes('\u0000')) {
+            throw new Error('The selected file contains null bytes and is not plain UTF-8 text.');
+        }
+        return text;
+    }
+
+    function initialize() {
+        const elements = {
+            form: document.getElementById('orcoForm'),
+            shifts: document.getElementById('shifts'),
+            inputName: document.getElementById('inputName'),
+            shiftFile: document.getElementById('shiftFile'),
+            fileStatus: document.getElementById('fileStatus'),
+            exampleButton: document.getElementById('exampleButton'),
+            clearButton: document.getElementById('clearButton'),
+            classifyButton: document.getElementById('classifyButton'),
+            formatHint: document.getElementById('formatHint'),
+            error: document.getElementById('errorBox'),
+            results: document.getElementById('results'),
+            resultsHeading: document.getElementById('resultsHeading'),
+            resultSummary: document.getElementById('resultSummary'),
+            resultNotice: document.getElementById('resultNotice'),
+            resultRows: document.getElementById('resultRows'),
+            canvas: document.getElementById('resultCanvas'),
+            downloadResult: document.getElementById('downloadResult'),
+            downloadPlot: document.getElementById('downloadPlot'),
+            downloadStats: document.getElementById('downloadStats')
+        };
+        const statsText = document.getElementById('statsData').textContent.trim() + '\n';
+        const exampleText = document.getElementById('ubiquitinExample').textContent.trim() + '\n';
+        const formatRadios = [...elements.form.querySelectorAll('input[name="format"]')];
+        const objectUrls = new Set();
+        const state = { generation: 0 };
+        let classes;
+
+        function currentFormat() {
+            const selected = formatRadios.find((radio) => radio.checked);
+            return selected ? selected.value : 'shifty';
+        }
+
+        function clearError() {
+            elements.error.textContent = '';
+            elements.error.hidden = true;
+        }
+
+        function showError(message, focusTarget) {
+            elements.error.textContent = message;
+            elements.error.hidden = false;
+            elements.error.focus();
+            if (focusTarget) {
+                focusTarget.setAttribute('aria-invalid', 'true');
+            }
+        }
+
+        function clearInvalidState() {
+            elements.shifts.removeAttribute('aria-invalid');
+            elements.shiftFile.removeAttribute('aria-invalid');
+        }
+
+        function revokeAnchorUrl(anchor) {
+            const url = anchor.dataset.objectUrl;
+            if (url) {
+                URL.revokeObjectURL(url);
+                objectUrls.delete(url);
+                delete anchor.dataset.objectUrl;
+            }
+        }
+
+        function hideDownload(anchor) {
+            revokeAnchorUrl(anchor);
+            anchor.hidden = true;
+            anchor.removeAttribute('href');
+            anchor.removeAttribute('download');
+        }
+
+        function setBlobDownload(anchor, contents, mimeType, filename) {
+            hideDownload(anchor);
+            try {
+                const blob = new Blob([contents], { type: mimeType });
+                const url = URL.createObjectURL(blob);
+                objectUrls.add(url);
+                anchor.dataset.objectUrl = url;
                 anchor.href = url;
                 anchor.download = filename;
-                anchor.style.display = 'inline';
+                anchor.hidden = false;
+            } catch (error) {
+                hideDownload(anchor);
+                throw new Error(`The browser could not prepare ${filename} for download.`);
             }
+        }
 
-            // Build a SHIFTY-style reference-statistics table from the in-memory CSV
-            // (the #statsData block). Columns are fixed-width and the header is preceded
-            // by a comment block describing source, modification, and format.
-            function referenceResidueParts(label) {
-                if (label === 'Cys(ox)') return { aa: 'C', form: 'ox' };
-                if (label === 'Cys(red)') return { aa: 'C', form: 'red' };
-                return { aa: toOneLetter(label), form: '-' };
+        function appendNotice(message) {
+            const current = elements.resultNotice.textContent;
+            elements.resultNotice.textContent = current ? `${current} ${message}` : message;
+            elements.resultNotice.hidden = false;
+        }
+
+        function clearResults() {
+            state.generation += 1;
+            elements.results.hidden = true;
+            elements.resultRows.textContent = '';
+            elements.resultSummary.textContent = '';
+            elements.resultNotice.textContent = '';
+            elements.resultNotice.hidden = true;
+            hideDownload(elements.downloadResult);
+            hideDownload(elements.downloadPlot);
+            try {
+                const context = elements.canvas.getContext('2d');
+                if (context) {
+                    context.clearRect(0, 0, elements.canvas.width, elements.canvas.height);
+                }
+            } catch (error) {
+                elements.canvas.removeAttribute('aria-label');
             }
+        }
 
-            function makeStatsText() {
-                var rows = STATS_TEXT.split(/\r?\n/);
-                var header = rows[0].split(',');
-                var idx = {};
-                for (var i = 0; i < header.length; i++) idx[header[i]] = i;
+        function resetFileInput() {
+            elements.shiftFile.value = '';
+            elements.fileStatus.textContent = '';
+        }
 
-                var cols = ['state',
-                    'HA_mu', 'HA_sigma',
-                    'CA_mu', 'CA_sigma',
-                    'CB_mu', 'CB_sigma',
-                    'CO_mu', 'CO_sigma',
-                    'N_mu', 'N_sigma',
-                    'HN_mu', 'HN_sigma'];
-                var widths = [7, 9, 10, 9, 10, 9, 10, 9, 10, 9, 9, 9, 10];
+        function focusShiftStart() {
+            elements.shifts.focus();
+            elements.shifts.setSelectionRange(0, 0);
+            elements.shifts.scrollTop = 0;
+        }
 
-                var out = [];
-                out.push('# ORCO Version 1.2 reference statistics');
-                out.push('# Amino acids use standard one-letter codes. Cysteine form is listed separately.');
-                out.push('# Source: Wishart RefDB per-residue, per-secondary-structure summary');
-                out.push('#         https://refdb.wishartlab.com/stat.html');
-                out.push('# Reference: Zhang H, Neal S, Wishart DS. RefDB: A database of uniformly');
-                out.push('#            referenced protein chemical shifts. J. Biomol. NMR 25:173-195 (2003).');
-                out.push('#');
+        function applyFormat() {
+            const format = currentFormat();
+            elements.formatHint.textContent = FORMAT_HINTS[format];
+            const currentText = elements.shifts.value.trim();
+            if (format === 'shifty' && !currentText) {
+                elements.shifts.value = HEADER_TEXT;
+            } else if (format !== 'shifty' && currentText === HEADER_TEXT.trim()) {
+                elements.shifts.value = '';
+            }
+            elements.shifts.scrollTop = 0;
+            clearError();
+            clearInvalidState();
+            clearResults();
+        }
 
-                var headerLine = '#' + pad('AA', 4) + pad('form', 7);
-                for (var ci = 0; ci < cols.length; ci++) headerLine += pad(cols[ci], widths[ci]);
-                out.push(headerLine);
-
-                for (var r = 1; r < rows.length; r++) {
-                    var line = rows[r];
-                    if (!line.trim()) continue;
-                    var p = line.split(',');
-                    var residueParts = referenceResidueParts(p[idx.residue]);
-                    var rowLine = ' ' + pad(residueParts.aa, 4) + pad(residueParts.form, 7);
-                    for (var ci2 = 0; ci2 < cols.length; ci2++) {
-                        var v = p[idx[cols[ci2]]];
-                        if (v === undefined || v === '') v = '';
-                        rowLine += pad(v, widths[ci2]);
+        function preparePlotDownload(filename, generation) {
+            hideDownload(elements.downloadPlot);
+            if (typeof elements.canvas.toBlob !== 'function') {
+                appendNotice('PNG export is unavailable in this browser.');
+                return;
+            }
+            try {
+                elements.canvas.toBlob((blob) => {
+                    if (generation !== state.generation) {
+                        return;
                     }
-                    out.push(rowLine);
-                }
-                return out.join('\n') + '\n';
+                    if (!blob) {
+                        appendNotice('The browser could not create the PNG plot.');
+                        return;
+                    }
+                    try {
+                        revokeAnchorUrl(elements.downloadPlot);
+                        const url = URL.createObjectURL(blob);
+                        objectUrls.add(url);
+                        elements.downloadPlot.dataset.objectUrl = url;
+                        elements.downloadPlot.href = url;
+                        elements.downloadPlot.download = filename;
+                        elements.downloadPlot.textContent = `Download ${filename}`;
+                        elements.downloadPlot.hidden = false;
+                    } catch (error) {
+                        appendNotice('The browser could not prepare the PNG download.');
+                    }
+                }, 'image/png');
+            } catch (error) {
+                appendNotice('The browser could not create the PNG plot.');
             }
+        }
 
-            setDownload(downloadStats, makeStatsText(), 'orco_reference_stats.txt');
+        try {
+            classes = parseEmbeddedStatistics(statsText);
+        } catch (error) {
+            elements.classifyButton.disabled = true;
+            elements.exampleButton.disabled = true;
+            elements.shiftFile.disabled = true;
+            elements.downloadStats.hidden = true;
+            showError(
+                error && error.message
+                    ? `ORCO could not initialize: ${error.message}`
+                    : 'ORCO could not initialize.'
+            );
+            return;
+        }
 
-            function hideDownload(anchor) {
-                revokeDownload(anchor);
-                anchor.style.display = 'none';
-                anchor.removeAttribute('href');
+        try {
+            setBlobDownload(
+                elements.downloadStats,
+                statsText,
+                'text/csv;charset=utf-8',
+                'orco_stats.csv'
+            );
+        } catch (error) {
+            elements.downloadStats.hidden = true;
+            showError('The browser could not prepare the reference-statistics download.');
+        }
+
+        formatRadios.forEach((radio) => radio.addEventListener('change', applyFormat));
+
+        elements.shiftFile.addEventListener('change', () => {
+            clearError();
+            clearInvalidState();
+            clearResults();
+            elements.fileStatus.textContent = '';
+            if (!elements.shiftFile.files || elements.shiftFile.files.length === 0) {
+                return;
             }
-
-            function clearResults() {
-                resultsBox.hidden = true;
-                resultText.textContent = '';
-                var ctx = resultCanvas.getContext('2d');
-                ctx.clearRect(0, 0, resultCanvas.width, resultCanvas.height);
-                plotWrap.hidden = true;
-                hideDownload(downloadPlot);
-                hideDownload(downloadResult);
-                clearError();
-            }
-
-            function currentFormat() {
-                for (var i = 0; i < formatRadios.length; i++) {
-                    if (formatRadios[i].checked) return formatRadios[i].value;
-                }
-                return 'shifty';
-            }
-
-            // The SHIFTY header is prefilled as a template. Carry it in and out when
-            // the format changes, but only while the box still holds that template,
-            // so nothing the user typed is ever discarded.
-            function applyFormat() {
-                var format = currentFormat();
-                shiftsHint.innerHTML = FORMAT_HINTS[format];
-
-                var text = shiftsBox.value.trim();
-                if (format === 'shifty') {
-                    if (!text) shiftsBox.value = HEADER_TEXT;
-                } else if (text === HEADER_TEXT.trim()) {
-                    shiftsBox.value = '';
-                }
-                clearResults();
-            }
-
-            for (var fi = 0; fi < formatRadios.length; fi++) {
-                formatRadios[fi].onchange = applyFormat;
-            }
-
-            function resetFileInput() {
-                shiftFile.value = '';
-                fileStatus.textContent = '';
-            }
-
-            shiftFile.onchange = function () {
-                clearResults();
-                fileStatus.textContent = '';
-
-                if (!shiftFile.files || shiftFile.files.length === 0) return;
-                var file = shiftFile.files[0];
-                var lowerName = file.name.toLowerCase();
-                if (lowerName.slice(-4) !== '.txt' && lowerName.slice(-4) !== '.str') {
-                    resetFileInput();
-                    showError('Please choose a .txt or .str file.');
-                    return;
-                }
-
-                var reader = new FileReader();
-                reader.onload = function () {
-                    shiftsBox.value = String(reader.result || '');
-                    fileStatus.textContent = 'Loaded: ' + file.name;
-                    clearError();
-                    shiftsBox.focus();
-                };
-                reader.onerror = function () {
-                    resetFileInput();
-                    showError('The selected file could not be read.');
-                };
-                reader.readAsText(file);
-            };
-
-            exampleButton.onclick = function () {
+            const file = elements.shiftFile.files[0];
+            if (file.size > MAX_FILE_BYTES) {
                 resetFileInput();
-                // The bundled example is SHIFTY, so the format must follow it.
-                document.getElementById('fmtShifty').checked = true;
-                shiftsHint.innerHTML = FORMAT_HINTS.shifty;
-                shiftsBox.value = UBIQUITIN_EXAMPLE;
-                clearResults();
-                fileStatus.textContent = 'Loaded: ubiquitin example';
-                shiftsBox.focus();
-            };
+                showError(
+                    `The selected file is ${file.size.toLocaleString()} bytes. ` +
+                    `The limit is ${MAX_FILE_BYTES.toLocaleString()} bytes.`,
+                    elements.shiftFile
+                );
+                return;
+            }
 
-            clearButton.onclick = function () {
-                resetFileInput();
-                shiftsBox.value = (currentFormat() === 'shifty') ? HEADER_TEXT : '';
-                inputName.value = '';
-                clearResults();
-                shiftsBox.focus();
-            };
-
-            form.onsubmit = function (event) {
-                event.preventDefault();
-                clearResults();
-
-                var input = shiftsBox.value;
-                if (!input.trim()) {
-                    showError('Please enter a formatted shift table.');
-                    return false;
-                }
-
+            const reader = new FileReader();
+            reader.addEventListener('load', () => {
                 try {
-                    var residues = parseInput(input, currentFormat());
-                    if (Object.keys(residues).length === 0) {
-                        showError('No residue rows were found beneath the header.');
-                        return false;
+                    if (!(reader.result instanceof ArrayBuffer)) {
+                        throw new Error('The selected file could not be read as text.');
                     }
-
-                    var analyses = analyzeResidues(residues);
-                    var visibleOut = makeVisibleOutput(analyses);
-                    var downloadOut = makeDownloadOutput(analyses);
-                    resultText.textContent = visibleOut;
-                    renderResultPlot(analyses);
-                    plotWrap.hidden = false;
-                    var filename = resultFilename();
-                    setDownload(downloadResult, downloadOut, filename);
-                    downloadResult.textContent = 'Download ' + filename;
-                    resultsBox.hidden = false;
-                    // The results sit below the fold on a long input; without this, Submit
-                    // appears to do nothing.
-                    if (resultsBox.scrollIntoView) {
-                        resultsBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    const text = decodeUtf8(reader.result);
+                    if (text.length > MAX_INPUT_CHARACTERS) {
+                        throw new Error(
+                            `The decoded file exceeds the ${MAX_INPUT_CHARACTERS.toLocaleString()}-character limit.`
+                        );
                     }
-                } catch (err) {
-                    showError(err && err.message ? err.message : String(err));
+                    elements.shifts.value = text;
+                    elements.fileStatus.textContent = `Loaded: ${file.name}`;
+                    focusShiftStart();
+                } catch (error) {
+                    resetFileInput();
+                    showError(
+                        error && error.message
+                            ? error.message
+                            : 'The selected file could not be read.',
+                        elements.shiftFile
+                    );
                 }
-                return false;
-            };
-        }());
+            });
+            reader.addEventListener('error', () => {
+                resetFileInput();
+                showError('The selected file could not be read.', elements.shiftFile);
+            });
+            reader.addEventListener('abort', () => {
+                resetFileInput();
+                showError('Reading the selected file was cancelled.', elements.shiftFile);
+            });
+            try {
+                reader.readAsArrayBuffer(file);
+            } catch (error) {
+                resetFileInput();
+                showError('The selected file could not be read.', elements.shiftFile);
+            }
+        });
+
+        elements.exampleButton.addEventListener('click', () => {
+            resetFileInput();
+            document.getElementById('fmtShifty').checked = true;
+            elements.formatHint.textContent = FORMAT_HINTS.shifty;
+            elements.shifts.value = exampleText;
+            elements.shifts.scrollTop = 0;
+            elements.fileStatus.textContent = 'Loaded: ubiquitin example';
+            clearError();
+            clearInvalidState();
+            clearResults();
+            focusShiftStart();
+        });
+
+        elements.clearButton.addEventListener('click', () => {
+            resetFileInput();
+            elements.shifts.value = currentFormat() === 'shifty' ? HEADER_TEXT : '';
+            elements.shifts.scrollTop = 0;
+            elements.inputName.value = '';
+            clearError();
+            clearInvalidState();
+            clearResults();
+            focusShiftStart();
+        });
+
+        elements.form.addEventListener('submit', (event) => {
+            event.preventDefault();
+            clearError();
+            clearInvalidState();
+            clearResults();
+
+            try {
+                const parsed = parseInput(elements.shifts.value, currentFormat());
+                const analyses = analyzeResidues(parsed.residues, classes);
+                const noObservationRows = analyses.filter((analysis) => analysis.noObservations);
+                const meanSetSize = accurateSum(
+                    analyses.map((analysis) => analysis.goldilocks.length)
+                ) / analyses.length;
+                const requestedName = elements.inputName.value.trim();
+                const baseName = safeOutputBaseName(requestedName);
+                const resultFilename = requestedName
+                    ? `${baseName}_orco_probabilities.txt`
+                    : 'orco_probabilities.txt';
+                const plotFilename = requestedName
+                    ? `${baseName}_orco_plot.png`
+                    : 'orco_plot.png';
+                const title = requestedName
+                    ? `ORCO (${requestedName.slice(0, 60)})`
+                    : 'ORCO';
+
+                renderResultsTable(analyses, elements.resultRows);
+                elements.resultSummary.textContent =
+                    `${analyses.length} residue ${analyses.length === 1 ? 'record' : 'records'} analyzed; ` +
+                    `mean Goldilocks set size ${meanSetSize.toFixed(2)}.`;
+                for (const warning of parsed.warnings) {
+                    appendNotice(warning);
+                }
+                if (noObservationRows.length > 0) {
+                    const numbers = noObservationRows
+                        .slice(0, 12)
+                        .map((analysis) => analysis.sequence)
+                        .join(', ');
+                    appendNotice(
+                        `${noObservationRows.length} residue ${noObservationRows.length === 1 ? 'record has' : 'records have'} ` +
+                        `no usable shifts and therefore ${noObservationRows.length === 1 ? 'uses' : 'use'} the ` +
+                        `uniform 20-state prior: ${numbers}${noObservationRows.length > 12 ? ', …' : ''}.`
+                    );
+                }
+
+                renderPlot(analyses, elements.canvas, title);
+                setBlobDownload(
+                    elements.downloadResult,
+                    makeDownloadText(analyses),
+                    'text/plain;charset=utf-8',
+                    resultFilename
+                );
+                elements.downloadResult.textContent =
+                    `Download full probabilities (${resultFilename})`;
+                const generation = state.generation;
+                preparePlotDownload(plotFilename, generation);
+                elements.results.hidden = false;
+                elements.resultsHeading.focus();
+            } catch (error) {
+                showError(
+                    error && error.message ? error.message : String(error),
+                    elements.shifts
+                );
+            }
+        });
+
+        window.addEventListener('beforeunload', () => {
+            for (const url of objectUrls) {
+                URL.revokeObjectURL(url);
+            }
+            objectUrls.clear();
+        });
+    }
+
+    initialize();
+}());
     </script>
 </body>
 
